@@ -1,0 +1,58 @@
+{
+  "name": "RSI Simple Strategy",
+  "long": {
+    "entry_all": [
+      {
+        "indicator": "rsi",
+        "timeframe": "5m",
+     "op": "<",
+        "params": [{"name": "period", "value": 14}],
+        "rhs": 30
+      }
+    ],
+ "entry_any": [],
+    "exit_rules": [
+      {
+        "kind": "tp_sl_fixed",
+        "params": {"tp_pct": 2.0, "sl_pct": 1.0}
+    }
+    ]
+  },
+  "short": {
+  "entry_all": [
+      {
+        "indicator": "rsi",
+        "timeframe": "5m",
+        "op": ">",
+        "params": [{"name": "period", "value": 14}],
+        "rhs": 70
+      }
+  ],
+    "entry_any": [],
+    "exit_rules": [
+      {
+"kind": "tp_sl_fixed",
+  "params": {"tp_pct": 2.0, "sl_pct": 1.0}
+      }
+    ]
+  },
+  "data": {
+    "exchange": "bitget",
+    "symbols": ["BTC/USDT:USDT", "ETH/USDT:USDT"],
+    "timeframe": "5m",
+    "since": 1704067200000,
+    "until": 1735689600000,
+    "higher_tf": ["1h", "4h"]
+  },
+  "risk": {
+    "leverage": 3.0,
+    "position_sizing": "fixed_usd",
+    "size_value": 1000.0,
+    "max_concurrent_positions": 1
+  },
+  "objective": {
+  "expression": "sharpe"
+  },
+  "param_space": [],
+  "warmup_bars": 300
+}

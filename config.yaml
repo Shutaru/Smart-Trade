@@ -6,25 +6,25 @@ db:
 account:
   starting_equity_usd: 100000
 fees:
-  spread_bps: 1.0
-  taker_fee_bps: 5.0
-  maker_fee_bps: 2.0
+  spread_bps: 1
+  taker_fee_bps: 5
+  maker_fee_bps: 2
 sizing:
   mode: usd
   usd: 1000
-  portfolio_pct: 1.0
+  portfolio_pct: 1
   leverage: 3
   max_margin_util_pct: 80
 risk:
   allow_shorts: true
   sl_tp_style: atr_fixed
-  sl_atr_mult: 2.0
-  tp_rr_multiple: 2.0
-  breakeven_at_R: 1.0
-  trail_atr_mult: 2.0
-  partial_tp_at_R: 1.0
+  sl_atr_mult: 2
+  tp_rr_multiple: 2
+  breakeven_at_R: 1
+  trail_atr_mult: 2
+  partial_tp_at_R: 1
   time_stop_bars: 96
-  max_daily_loss_pct: 2.0
+  max_daily_loss_pct: 2
 bitget:
   api_key: ''
   api_secret: ''
@@ -71,9 +71,9 @@ tuning:
   - 20
   - 30
   bb_k:
-  - 2.0
+  - 2
   - 2.5
-  - 3.0
+  - 3
   stoch_k:
   - 5
   - 9
@@ -97,15 +97,15 @@ tuning:
   - 14
   - 20
   supertrend_mult:
-  - 2.0
-  - 3.0
-  - 4.0
+  - 2
+  - 3
+  - 4
   keltner_len:
   - 20
   - 30
   keltner_mult:
   - 1.5
-  - 2.0
+  - 2
   sl_tp_style:
   - atr_fixed
   - atr_trailing
@@ -115,22 +115,22 @@ tuning:
   - breakeven_then_trail
   sl_atr_mult:
   - 1.5
-  - 2.0
+  - 2
   - 2.5
-  - 3.0
+  - 3
   tp_rr_multiple:
   - 1.5
-  - 2.0
+  - 2
   - 2.5
-  - 3.0
+  - 3
   breakeven_at_R:
   - 0.5
-  - 1.0
+  - 1
   - 1.5
   trail_atr_mult:
-  - 1.0
+  - 1
   - 1.5
-  - 2.0
+  - 2
   - 2.5
   time_stop_bars:
   - 48

@@ -1,77 +1,93 @@
-import React, { useEffect, useRef } from 'react';
-import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { Skeleton } from '../ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface EquityData {
-    time: string;
-    value: number;
+interface AccountEquityChartProps {
+    mode: 'live' | 'paper';
 }
 
-const fetchAccountEquity = async (): Promise<EquityData[]> => {
-    // Presumindo a existência deste novo endpoint
-    const { data } = await api.get('/api/account/equity');
-    return data;
+const fetchLiveEquity = async () => {
+    const { data } = await api.get('/api/live/equity_curve');
+    return data.curve || [];
 };
 
-// Dados de exemplo enquanto o endpoint não existe
-const mockEquityData: EquityData[] = Array.from({ length: 100 }, (_, i) => ({
-    time: new Date(Date.now() - (100 - i) * 24 * 3600 * 1000).toISOString().split('T')[0],
-    value: 10000 + i * 50 + Math.random() * 300 - 150,
-}));
+const fetchPaperEquity = async () => {
+    const { data } = await api.get('/api/paper/equity_curve');
+    return data.curve || [];
+};
 
-const AccountEquityChart: React.FC = () => {
-    const chartContainerRef = useRef<HTMLDivElement>(null);
-    const chart = useRef<IChartApi | undefined>(undefined);
-    const areaSeries = useRef<ISeriesApi<'Area'> | undefined>(undefined);
-    
-    // Para desenvolvimento, vamos usar os dados de exemplo.
-    // Para ligar à API, basta remover a propriedade `initialData`.
+const AccountEquityChart: React.FC<AccountEquityChartProps> = ({ mode }) => {
     const { data, isLoading } = useQuery({ 
-        queryKey: ['accountEquity'], 
-        queryFn: fetchAccountEquity,
-        initialData: mockEquityData, // Remover esta linha para usar a API
+        queryKey: ['equityCurve', mode], 
+      queryFn: mode === 'live' ? fetchLiveEquity : fetchPaperEquity,
+        refetchInterval: 10000 // Atualiza a cada 10 segundos
     });
 
-    useEffect(() => {
-        if (chartContainerRef.current && data && data.length > 0) {
-            chart.current = createChart(chartContainerRef.current, {
-                width: chartContainerRef.current.clientWidth,
-                height: 300,
-                layout: { background: { color: 'transparent' }, textColor: '#d1d4dc' },
-                grid: { vertLines: { color: 'hsl(var(--border))' }, horzLines: { color: 'hsl(var(--border))' } },
-                timeScale: { borderColor: 'hsl(var(--border))' },
-                rightPriceScale: { borderColor: 'hsl(var(--border))' },
-            });
-
-            areaSeries.current = chart.current.addAreaSeries({
-                lineColor: '#2563eb',
-                topColor: 'rgba(37, 99, 235, 0.4)',
-                bottomColor: 'rgba(37, 99, 235, 0)',
-                lineWidth: 2,
-            });
-
-            areaSeries.current.setData(data);
-            chart.current.timeScale().fitContent();
-        }
-
-        return () => chart.current?.remove();
-    }, [data]);
-
-    return (
-        <Card className="shadow-soft lg:col-span-3">
-            <CardHeader>
-                <CardTitle>Evolução da Conta</CardTitle>
-                <CardDescription>Performance do balanço total ao longo do tempo.</CardDescription>
-            </CardHeader>
+    if (isLoading) {
+        return (
+            <Card className="shadow-soft">
+      <CardHeader>
+      <CardTitle>Equity Curve</CardTitle>
+           <CardDescription>{mode === 'live' ? 'Live Trading' : 'Paper Trading'}</CardDescription>
+                </CardHeader>
             <CardContent>
-                {isLoading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                ) : (
-                    <div ref={chartContainerRef} className="h-[300px] w-full" />
-                )}
+        <Skeleton className="h-80 w-full" />
+                </CardContent>
+    </Card>
+        );
+    }
+
+    const chartData = (data || []).map((point: any) => ({
+ date: new Date(point.ts * 1000).toLocaleDateString(),
+     equity: point.equity
+    }));
+
+  return (
+<Card className="shadow-soft">
+            <CardHeader>
+        <CardTitle>Equity Curve</CardTitle>
+          <CardDescription>
+            {mode === 'live' ? '💰 Live Trading Account' : '🧪 Paper Trading Simulation'}
+           </CardDescription>
+       </CardHeader>
+     <CardContent>
+     {chartData.length === 0 ? (
+               <div className="h-80 flex items-center justify-center text-muted-foreground">
+        Sem dados disponíveis
+  </div>
+          ) : (
+          <ResponsiveContainer width="100%" height={320}>
+         <AreaChart data={chartData}>
+   <defs>
+         <linearGradient id={`colorEquity-${mode}`} x1="0" y1="0" x2="0" y2="1">
+    <stop offset="5%" stopColor={mode === 'live' ? '#10b981' : '#3b82f6'} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={mode === 'live' ? '#10b981' : '#3b82f6'} stopOpacity={0} />
+</linearGradient>
+        </defs>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+           <XAxis dataKey="date" className="text-xs" />
+    <YAxis className="text-xs" />
+   <Tooltip 
+        contentStyle={{ 
+ backgroundColor: 'hsl(var(--popover))', 
+           border: '1px solid hsl(var(--border))',
+              borderRadius: '8px'
+           }}
+  />
+          <Area 
+         type="monotone" 
+     dataKey="equity" 
+     stroke={mode === 'live' ? '#10b981' : '#3b82f6'} 
+              strokeWidth={2}
+    fillOpacity={1} 
+     fill={`url(#colorEquity-${mode})`} 
+   />
+         </AreaChart>
+    </ResponsiveContainer>
+       )}
             </CardContent>
         </Card>
     );
