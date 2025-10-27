@@ -617,8 +617,26 @@ def api_runs_list():
 
 # ============================= Static UI ================================
 
-# Servir a pasta web/ (index.html)
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
+SPA_DIST = os.path.join(PROJECT_ROOT, "webapp", "dist")
+spa_static = StaticFiles(directory=SPA_DIST, html=True) if os.path.isdir(SPA_DIST) else None
+
+if spa_static is not None:
+    app.mount("/", spa_static, name="spa")
+
+
+@app.get("/{path_name:path}", include_in_schema=False)
+def spa_fallback(path_name: str):
+    if path_name.startswith("api") or path_name.startswith("ws") or path_name.startswith("docs"):
+        raise HTTPException(404)
+    if spa_static is None:
+        raise HTTPException(503, "SPA build not available")
+    full_path, stat_result = spa_static.lookup_path(path_name)
+    if stat_result is not None and os.path.isfile(full_path):
+        return FileResponse(full_path)
+    index_path = os.path.join(SPA_DIST, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(404, "index.html not found")
 
 # === OHLCV do DB para o gráfico (candles) ===
 @app.get("/api/candles")

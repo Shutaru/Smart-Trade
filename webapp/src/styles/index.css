@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark light;
+}
+
+body {
+  @apply font-sans bg-background text-slate-100 antialiased;
+}
+
+::selection {
+  background-color: theme('colors.indigo.500');
+  color: white;
+}

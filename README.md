@@ -1,95 +1,112 @@
-# BTC 5m Futures — Bitget GUI (v7)
+# Smart Trade Terminal (v13-Pro)
 
-Tudo para correr **local** (Windows/Linux) com **GUI**, **paper/live**, **Grid/WF**, **ML (GPU)**, **LLM Co‑Pilot**, dashboards, ETAs e muito mais.
+Uma stack completa para trading de futuros BTC/USDT a 5 minutos com backend FastAPI e uma nova SPA React (Vite + TypeScript + Tailwind + shadcn/ui). O objetivo é oferecer uma experiência "Smart Terminal" moderna no estilo 3Commas/Lovable, com execução paper/live, laboratórios de estratégia e gestão de dados/configuração.
 
-## 🚀 Instalação
-```powershell
+> **Nota**: `config.yaml` não deve ser versionado; utilize `config.example.yaml` como referência e mantenha as suas chaves/API em segurança.
+
+## ✨ Principais Módulos
+
+### Backend FastAPI
+- Endpoints para execução paper/live (Bitget via CCXT), gestão de risco e monitorização de conta.
+- Jobs longos: backtest, grid search, walk-forward, Optuna + ML pipeline.
+- WebSocket de preço em tempo real (`/ws/price`).
+- Servidor estático da SPA gerada em `webapp/dist`, com fallback para `index.html`.
+
+### Frontend React (webapp/)
+- React + Vite + TypeScript + Tailwind + shadcn/ui + lucide-react.
+- Layout persistente com Topbar (modo, símbolo, métricas live) e Sidebar (Smart Trade, Strategy Lab, Data, Reports, Settings).
+- Smart Trade: gráfico de velas `lightweight-charts`, ordens (market/limit/stop/TP/SL/OCO), posições, ordens abertas, KPIs e alertas.
+- Strategy Lab: lançamento de Backtest/Grid/WF/Optuna, logs de jobs, runs recentes e relatórios HTML embutidos.
+- Data: gestão de pares Bitget, backfill de candles, seleção de DB/símbolo para `config.yaml`.
+- Reports: listagem rápida dos relatórios HTML gerados (backtest, grid, WF, ML).
+- Settings: editor de configuração (JSON), snapshots/rollback, perfis, alternância de tema (dark/light) e estado da API.
+- Hooks utilitários para WebSocket com reconexão, polling e persistência em `localStorage`.
+
+## 🧩 Estrutura do Repositório
+- `gui_server.py` — servidor FastAPI, endpoints REST/WS e dispatch de jobs.
+- `webapp/` — SPA React moderna (código-fonte e tooling).
+- `backtest.py`, `gridsearch.py`, `walkforward.py` — pipeline de backtests.
+- `ml_data.py`, `ml_train.py`, `ml_bt.py`, `ml_optuna.py` — pipeline de ML supervisionado.
+- `features.py`, `indicators.py`, `strategy.py`, `sizing.py`, `metrics.py`, `broker_futures_paper.py` — lógica de trading e indicadores técnicos.
+- `executor_bitget.py` — integração live Bitget (CCXT).
+- `db_sqlite.py`, `bitget_backfill.py` — persistência e backfill de candles 5 m.
+- `requirements.txt` — dependências Python.
+
+## ⚙️ Pré-Requisitos
+- Python 3.10+
+- Node.js 18+
+- Yarn ou npm (o projeto usa npm por omissão)
+
+## 🚀 Instalação Backend
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1     # Windows
-# source .venv/bin/activate        # Linux/Mac
+source .venv/bin/activate             # Linux/Mac
+# .\.venv\Scripts\Activate.ps1       # Windows
 pip install -r requirements.txt
-uvicorn gui_server:app --host 127.0.0.1 --port 8000 --reload
-# abre: http://localhost:8000
 ```
 
-## 📂 Estrutura
-- `gui_server.py` — FastAPI (endpoints + arrancar jobs + ETAs + LLM via Ollama)
-- `web/` — GUI moderna com dashboards
-- `config.yaml` — modo, sizing, fees, risco, ML, **tuning ranges**
-- `backtest.py` / `gridsearch.py` / `walkforward.py`
-- `ml_train.py` / `ml_bt.py` / `ml_optuna.py`
-- `indicators.py` / `features.py` / `sizing.py` / `broker_futures_paper.py` / `metrics.py`
-- `executor_bitget.py` — stub de integração LIVE (Bitget, via ccxt)
+### Executar Backend
+```bash
+uvicorn gui_server:app --host 127.0.0.1 --port 8000 --reload
+```
+A API ficará disponível em `http://127.0.0.1:8000` e servirá a build da SPA (`/`).
 
-## 🧭 Paper vs Live
-Escolhe no GUI **Modo persistente** (grava em `config.yaml`). O botão **Flatten (panic)** fecha posições (LIVE).
+## 💻 Instalação Frontend (webapp/)
+```bash
+cd webapp
+npm install
+```
 
-## 🔧 Tuning & Estratégia
-- Indicadores extra: **Stochastic/CCI/MACD/Supertrend/Keltner**, além de EMA/RSI/ADX/BB/Donchian/ATR.
-- SL/TP styles: `atr_fixed`, `atr_trailing`, `chandelier`, `supertrend`, `keltner`, `breakeven_then_trail`.
-- Ranges em `config.yaml:tuning`.
+### Desenvolvimento com Hot Reload
+```bash
+npm run dev
+```
+O Vite sobe em `http://127.0.0.1:5173`. Configure um proxy para as chamadas REST/WS ou inicie o backend simultaneamente.
 
-## 🤖 ML (GPU + Optuna)
-- `ml_train.py` treina MLP (P(subida), P(descida)) usando features 5m + regimes.
-- `ml_bt.py` faz backtest sobre as probabilidades (com SL/TP em ATR).
-- `ml_optuna.py` usa TODAS as GPUs (se houver) e maximiza **Sharpe** OOS (~1/3).
+### Build de Produção
+```bash
+npm run build
+```
+Os artefactos são emitidos para `webapp/dist/`, automaticamente servidos pelo FastAPI.
 
-## ⏱️ Progresso e ETA
-Todos os jobs escrevem `data/progress/job_*.json` com `{total, done, elapsed_sec, eta_sec}`. O GUI mostra barras com **ETA**.
+### Qualidade
+- `npm run lint` — ESLint + Prettier (TypeScript estrito).
+- `npm run typecheck` — `tsc --noEmit` para garantir typings sólidos.
 
-## 📈 Dashboards & Pareto
-- Equity & Drawdown, histograma PnL, OOS equity (WF), leaderboard (Grid), heatmap PnL, overlay equity+trades.
+## 📡 Integrações Principais
+- `GET /api/live/status` — ticker, posições, saldo, funding, ordens.
+- `POST /api/live/order` — envia ordens (market/limit/stop/TP/SL, flags `reduce_only`, `post_only`, `leverage`).
+- `POST /api/live/cancel_all`, `POST /api/live/market`, `POST /api/live/set_leverage`.
+- `GET /api/candles` — candles OHLCV 5 m (SQLite).
+- `GET /api/bitget/pairs`, `POST /api/bitget/backfill` — gestão de dados/pares.
+- `GET/POST /api/config/*` — leitura/escrita, snapshots e perfis de `config.yaml`.
+- `GET /api/runs/list`, `POST /api/backtest/run`, `POST /api/grid/run`, `POST /api/wf/run`, `POST /api/ml_optuna/run`.
+- `GET/POST /api/alerts/*` — alertas personalizados.
 
-## 🔒 Notas
-- Chaves no GUI são mascaradas; patchs LLM criam backup `.bak`.
-- Recomendo correres com **dados preenchidos** (candles 5m) via `db_sqlite` + backfill (tu adicionas as tuas credenciais Bitget e backfill por `ccxt`).
+## 🧠 Fluxo ML
+1. `bitget_backfill.py` preenche o DB SQLite com candles 5 m.
+2. `features.py` gera indicadores técnicos e regimes multi-timeframe.
+3. `ml_data.py` constrói dataset com labels (retornos após custos).
+4. `ml_train.py` treina o MLP (PyTorch) com normalização (`StandardScaler`).
+5. `ml_bt.py` avalia o modelo num backtest com gestão de risco.
+6. `ml_optuna.py` faz tuning conjunto (hiperparâmetros + risco) e gera relatórios Plotly.
+
+## 📊 Relatórios & Dados
+- Cada run cria uma pasta em `data/` com CSVs (`trades.csv`, `equity.csv`) e `report.html`.
+- Grid Search também gera `grid_results.csv` (utilizado no dashboard Pareto do Strategy Lab).
+- Walk-Forward consolida IS/OOS em `data/walkforward/<run>/` com curva agregada.
+
+## 🔒 Segurança & Boas Práticas
+- Nunca exponha API keys no frontend; mantenha-as apenas em `config.yaml` local.
+- Utilize `risk_limits` em `config.yaml` para controlar alavancagem, tamanho máximo e perda diária.
+- O frontend exibe pré-visualização de risco e bloqueia ordens fora dos limites.
+
+## 🧭 Roadmap Imediato
+- Integrar dados live de ordens/posições nas tabelas do Smart Trade.
+- Completar widgets do Strategy Lab (logs de jobs e Pareto dinâmico).
+- Implementar alertas com som e filtros avançados.
+
+## 🆘 Suporte
+Problemas ou sugestões? Abra uma issue descrevendo o cenário, logs relevantes e passos para reproduzir.
 
 Boa sorte e bons trades! 🟢
-
-## 📄 Relatório HTML
-Cada backtest gera `report.html` na pasta da run (equity, DD, KPIs, histograma PnL e heatmap DOW×HOUR).
-
-
-## 🔗 Bitget — Pares & Backfill
-No GUI podes listar pares USDT Perp da Bitget e fazer backfill 5m on‑demand para um DB por par (`data/db/<PAR>_5m.db`). Depois basta carregar "Usar no config".
-
-
-## 📘 ML Optuna Report
-Cada corrida grava `data/ml_optuna/<ts>/trials.csv` e `report.html` (best‑so‑far, top 20 e parâmetros).
-
-
-## 🧩 Snapshots de config
-Cria snapshots do `config.yaml` e faz rollback pelo GUI.
-
-
-## 🟢 Live Monitor
-Painel em tempo‑real (modo **live**) com preço, posições, ordens, funding e controlos: Buy/Sell MKT (reduce‑only), Set Leverage, Cancel All e Flatten.
-
-
-## 📦 Perfis de Estratégia
-Exporta/Importa/Aplica perfis (risk, sizing, fees, ml, symbol/db) a partir do GUI, com snapshots e rollback.
-
-
-## 📘 ML Backtest Report
-Cada `ml_bt.py` gera `data/ml_bt/report.html` com Equity/Drawdown/Histograma de PnL.
-
-
-
-## ⚙️ Risk Limits (config.yaml)
-```yaml
-risk_limits:
-  max_leverage: 10
-  max_order_usd: 50000
-  max_daily_loss_pct: 5.0
-```
-Ordens live respeitam estes limites (bloqueadas se excederem).
-
-## 🔌 Live WebSocket
-- Botão **WS Start** no Live Monitor liga ao `/ws/price` que subscreve o **Bitget WS** (ticker). Fallback por polling continua disponível.
-
-## 🧾 Tipos de Ordem (Live)
-- **Market**, **Limit** (post-only opcional), **Stop**, **Take Profit**, **Stop Loss** (com `stopPrice`).
-- Flag **reduce-only** disponível.
-
-## 🔔 Alertas
-- Regras simples (ex.: preço `>` valor), com **som** opcional.
