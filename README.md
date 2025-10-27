@@ -12,34 +12,34 @@ Inspirada em terminais profissionais como o 3Commas, esta aplicação combina um
 
 A interface de utilizador foi totalmente reconstruída em **React + TypeScript** para oferecer uma experiência de produto polida, rápida e intuitiva.
 
-*   **🖥️ Smart Trade:** Um painel de trading completo com gráficos de velas em tempo real (`lightweight-charts`), atualização via WebSocket, painel de ordens avançado (Market, Limit, Stop, Bracket Orders), e gestão de posições e ordens abertas.
-*   **🤖 Gestão de Bots:** Crie, configure e gira bots de trading automatizados. Monitorize o seu estado (Running, Paused, Stopped), modo (Paper/Live) e performance (PnL) a partir de um dashboard centralizado.
-*   **🔬 Strategy Lab:** Lance tarefas complexas de análise diretamente da UI. Inicie Backtests, Grid Searches, Walk-Forward Analysis e Otimizações de Hiperparâmetros com **ML Optuna**.
-*   **💾 Gestão de Dados:** Um hub para gerir os dados de mercado. Liste todos os pares de futuros disponíveis na Bitget e faça o *backfill* de dados históricos com um único clique.
-*   **📊 Relatórios:** Visualize os relatórios HTML gerados pelas suas análises (equity, drawdown, heatmaps, etc.) diretamente na aplicação.
-*   **⚙️ Configuração Centralizada:**
-    *   **Editor Visual:** Edite o seu ficheiro `config.yaml` num editor JSON seguro.
-    *   **Snapshots:** Crie e reverta para versões anteriores da sua configuração.
-    *   **Perfis:** Guarde, exporte, importe e aplique diferentes perfis de estratégia.
+-   **🖥️ Smart Trade:** Um painel de trading completo com gráficos de velas em tempo real (`lightweight-charts`), atualização via WebSocket, painel de ordens avançado (Market, Limit, Stop, Bracket Orders), e gestão de posições e ordens abertas.
+-   **🤖 Gestão de Bots:** Crie, configure e gira bots de trading automatizados. Monitorize o seu estado (Running, Paused, Stopped), modo (Paper/Live) e performance (PnL) a partir de um dashboard centralizado.
+-   **🔬 Strategy Lab:** Lance tarefas complexas de análise diretamente da UI. Inicie Backtests, Grid Searches, Walk-Forward Analysis e Otimizações de Hiperparâmetros com **ML Optuna**.
+-   **💾 Gestão de Dados:** Um hub para gerir os dados de mercado. Liste todos os pares de futuros disponíveis na Bitget e faça o *backfill* de dados históricos com um único clique.
+-   **📊 Relatórios:** Visualize os relatórios HTML gerados pelas suas análises (equity, drawdown, heatmaps, etc.) diretamente na aplicação.
+-   **⚙️ Configuração Centralizada:**
+    -   **Editor Visual:** Edite o seu ficheiro `config.yaml` num editor JSON seguro.
+    -   **Snapshots:** Crie e reverta para versões anteriores da sua configuração.
+    -   **Perfis:** Guarde, exporte, importe e aplique diferentes perfis de estratégia.
 
 ### 🐍 Backend: O Motor de Análise e Execução
 
 O coração da plataforma é um servidor **FastAPI** que expõe uma API REST + WebSocket para todas as operações.
 
-*   **🧠 ML Suite (GPU + Optuna):** Utilize o poder do `ml_optuna.py` para otimizar os seus modelos de Machine Learning, aproveitando todas as GPUs disponíveis para maximizar a performance (e.g., Sharpe Ratio).
-*   **🧭 Modos Paper vs. Live:** Alterne facilmente entre trading simulado (paper) e real (live). O modo é persistido no `config.yaml` para segurança.
-*   **🔧 Estratégia e Tuning:** O sistema suporta uma vasta gama de indicadores (Stochastic, CCI, MACD, Supertrend) e tipos de Stop Loss/Take Profit (`atr_trailing`, `chandelier`, `breakeven_then_trail`).
-*   **📈 Geração de Relatórios:** Cada backtest ou otimização gera um `report.html` detalhado com curvas de equity, drawdowns, KPIs, e visualizações gráficas.
-*   **⏱️ Monitorização de Progresso:** Todos os jobs de longa duração (backtests, ML) reportam o seu progresso, permitindo que a UI exiba barras de progresso com **ETA** (Tempo Estimado de Conclusão).
+-   **🧠 ML Suite (GPU + Optuna):** Utilize o poder do `ml_optuna.py` para otimizar os seus modelos de Machine Learning, aproveitando todas as GPUs disponíveis para maximizar a performance (e.g., Sharpe Ratio).
+-   **🧭 Modos Paper vs. Live:** Alterne facilmente entre trading simulado (paper) e real (live). O modo é persistido no `config.yaml` para segurança.
+-   **🔧 Estratégia e Tuning:** O sistema suporta uma vasta gama de indicadores (Stochastic, CCI, MACD, Supertrend) e tipos de Stop Loss/Take Profit (`atr_trailing`, `chandelier`, `breakeven_then_trail`).
+-   **📈 Geração de Relatórios:** Cada backtest ou otimização gera um `report.html` detalhado com curvas de equity, drawdowns, KPIs, e visualizações gráficas.
+-   **⏱️ Monitorização de Progresso:** Todos os jobs de longa duração (backtests, ML) reportam o seu progresso, permitindo que a UI exiba barras de progresso com **ETA** (Tempo Estimado de Conclusão).
 
 ---
 
 ## 🛠️ Tech Stack
 
-*   **Frontend:** React, Vite, TypeScript, TailwindCSS, shadcn/ui, TanStack Query, lightweight-charts, Framer Motion.
-*   **Backend:** Python 3, FastAPI, Uvicorn.
-*   **Análise & Trading:** CCXT, Pandas, NumPy, Scikit-learn, PyTorch, Optuna.
-*   **Base de Dados:** SQLite para dados de mercado.
+-   **Frontend:** React, Vite, TypeScript, TailwindCSS, shadcn/ui, TanStack Query, lightweight-charts, Framer Motion.
+-   **Backend:** Python 3, FastAPI, Uvicorn.
+-   **Análise & Trading:** CCXT, Pandas, NumPy, Scikit-learn, PyTorch, Optuna.
+-   **Base de Dados:** SQLite para dados de mercado.
 
 ---
 
@@ -48,8 +48,8 @@ O coração da plataforma é um servidor **FastAPI** que expõe uma API REST + W
 Siga estes passos para ter a plataforma a correr localmente.
 
 ### Pré-requisitos
-*   Python 3.8+
-*   Node.js 18+ e npm
+-   Python 3.8+
+-   Node.js 18+ e npm
 
 ### 1. Configuração do Backend
 ```bash
@@ -92,6 +92,6 @@ A interface irá ligar-se automaticamente ao backend através do proxy configura
 
 ## 🗺️ Próximos Passos do Roadmap
 
-*   **Página de Detalhe do Bot:** Uma vista dedicada para cada bot com gráficos de performance, histórico de trades e logs.
-*   **Dashboard Principal:** Um ecrã de entrada que agrega as informações mais importantes: balanço da conta, performance dos bots e alertas.
-*   **Suporte Multi-Exchange:** Abstrair a lógica de conexão para facilitar a adição de outras exchanges, como a Binance.
+-   **Página de Detalhe do Bot:** Uma vista dedicada para cada bot com gráficos de performance, histórico de trades e logs.
+-   **Dashboard Principal:** Um ecrã de entrada que agrega as informações mais importantes: balanço da conta, performance dos bots e alertas.
+-   **Suporte Multi-Exchange:** Abstrair a lógica de conexão para facilitar a adição de outras exchanges, como a Binance.

@@ -46,10 +46,7 @@ const Bots: React.FC = () => {
     };
     
     // Mock data if API returns nothing for development
-    const displayBots = bots || [
-        { id: 1, name: 'BTC Scalper', status: 'Running', mode: 'Live', pnl: 5.23 },
-        { id: 2, name: 'ETH Trend Follower', status: 'Paused', mode: 'Paper', pnl: -1.45 },
-    ];
+    const displayBots = bots || [];
 
     return (
         <div>
@@ -77,7 +74,19 @@ const Bots: React.FC = () => {
                         <TableBody>
                             {isLoading ? (
                                 Array.from({ length: 3 }).map((_, i) => (
-                                    <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                                    <TableRow key={`skeleton-${i}`}>
+                                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                        <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                                        <TableCell className="text-right space-x-2">
+                                            <Skeleton className="h-8 w-8 inline-block" />
+                                            <Skeleton className="h-8 w-8 inline-block" />
+                                            <Skeleton className="h-8 w-8 inline-block" />
+                                            <Skeleton className="h-8 w-8 inline-block" />
+                                            <Skeleton className="h-8 w-8 inline-block" />
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                             ) : displayBots && displayBots.length > 0 ? (
                                 displayBots.map((bot: any) => (

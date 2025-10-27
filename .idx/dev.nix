@@ -1,18 +1,19 @@
 # To learn more about how to use Nix to configure your environment
 # see: https://firebase.google.com/docs/studio/customize-workspace
-{ pkgs, ... }: {
+{
   # Which nixpkgs channel to use.
   channel = "stable-24.05"; # or "unstable"
 
   # Use https://search.nixos.org/packages to find packages
-  packages = [
-    pkgs.python311
-    pkgs.python311Packages.pip
-    pkgs.nodejs_20
+  pkgs = [
+    "python311"
+    "python311Packages.pip"
+    "nodejs_20"
   ];
 
   # Sets environment variables in the workspace
   env = {};
+
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
@@ -29,8 +30,8 @@
           manager = "web";
         };
         backend = {
-            command = ["uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000"];
-            manager = "process";
+          command = ["uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000"];
+          manager = "process";
         };
       };
     };
@@ -43,9 +44,7 @@
         npm-install = "cd webapp && npm install";
       };
       # Runs when the workspace is (re)started
-      onStart = {
-        # Backend e Frontend serão iniciados automaticamente pela secção `previews`
-      };
+      onStart = {};
     };
   };
 }
