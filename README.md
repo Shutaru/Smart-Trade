@@ -1,95 +1,97 @@
-# BTC 5m Futures — Bitget GUI (v7)
+# Plataforma de Trading Algorítmico para Futuros (Bitget)
 
-Tudo para correr **local** (Windows/Linux) com **GUI**, **paper/live**, **Grid/WF**, **ML (GPU)**, **LLM Co‑Pilot**, dashboards, ETAs e muito mais.
+Bem-vindo a uma plataforma de trading de alta performance, local-first e API-driven, desenhada para a automação e análise de estratégias de trading de futuros, com foco inicial na exchange **Bitget**.
 
-## 🚀 Instalação
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1     # Windows
-# source .venv/bin/activate        # Linux/Mac
+Inspirada em terminais profissionais como o 3Commas, esta aplicação combina um backend robusto em Python para análise e execução, com um frontend moderno e reativo em React, criando uma experiência de "Smart Terminal" completa.
+
+---
+
+## ✨ Funcionalidades Principais
+
+### 🚀 Frontend: O Smart Terminal
+
+A interface de utilizador foi totalmente reconstruída em **React + TypeScript** para oferecer uma experiência de produto polida, rápida e intuitiva.
+
+*   **🖥️ Smart Trade:** Um painel de trading completo com gráficos de velas em tempo real (`lightweight-charts`), atualização via WebSocket, painel de ordens avançado (Market, Limit, Stop, Bracket Orders), e gestão de posições e ordens abertas.
+*   **🤖 Gestão de Bots:** Crie, configure e gira bots de trading automatizados. Monitorize o seu estado (Running, Paused, Stopped), modo (Paper/Live) e performance (PnL) a partir de um dashboard centralizado.
+*   **🔬 Strategy Lab:** Lance tarefas complexas de análise diretamente da UI. Inicie Backtests, Grid Searches, Walk-Forward Analysis e Otimizações de Hiperparâmetros com **ML Optuna**.
+*   **💾 Gestão de Dados:** Um hub para gerir os dados de mercado. Liste todos os pares de futuros disponíveis na Bitget e faça o *backfill* de dados históricos com um único clique.
+*   **📊 Relatórios:** Visualize os relatórios HTML gerados pelas suas análises (equity, drawdown, heatmaps, etc.) diretamente na aplicação.
+*   **⚙️ Configuração Centralizada:**
+    *   **Editor Visual:** Edite o seu ficheiro `config.yaml` num editor JSON seguro.
+    *   **Snapshots:** Crie e reverta para versões anteriores da sua configuração.
+    *   **Perfis:** Guarde, exporte, importe e aplique diferentes perfis de estratégia.
+
+### 🐍 Backend: O Motor de Análise e Execução
+
+O coração da plataforma é um servidor **FastAPI** que expõe uma API REST + WebSocket para todas as operações.
+
+*   **🧠 ML Suite (GPU + Optuna):** Utilize o poder do `ml_optuna.py` para otimizar os seus modelos de Machine Learning, aproveitando todas as GPUs disponíveis para maximizar a performance (e.g., Sharpe Ratio).
+*   **🧭 Modos Paper vs. Live:** Alterne facilmente entre trading simulado (paper) e real (live). O modo é persistido no `config.yaml` para segurança.
+*   **🔧 Estratégia e Tuning:** O sistema suporta uma vasta gama de indicadores (Stochastic, CCI, MACD, Supertrend) e tipos de Stop Loss/Take Profit (`atr_trailing`, `chandelier`, `breakeven_then_trail`).
+*   **📈 Geração de Relatórios:** Cada backtest ou otimização gera um `report.html` detalhado com curvas de equity, drawdowns, KPIs, e visualizações gráficas.
+*   **⏱️ Monitorização de Progresso:** Todos os jobs de longa duração (backtests, ML) reportam o seu progresso, permitindo que a UI exiba barras de progresso com **ETA** (Tempo Estimado de Conclusão).
+
+---
+
+## 🛠️ Tech Stack
+
+*   **Frontend:** React, Vite, TypeScript, TailwindCSS, shadcn/ui, TanStack Query, lightweight-charts, Framer Motion.
+*   **Backend:** Python 3, FastAPI, Uvicorn.
+*   **Análise & Trading:** CCXT, Pandas, NumPy, Scikit-learn, PyTorch, Optuna.
+*   **Base de Dados:** SQLite para dados de mercado.
+
+---
+
+## 🚀 Guia de Iniciação Rápida
+
+Siga estes passos para ter a plataforma a correr localmente.
+
+### Pré-requisitos
+*   Python 3.8+
+*   Node.js 18+ e npm
+
+### 1. Configuração do Backend
+```bash
+# Clone o repositório
+git clone <URL_DO_SEU_REPOSITORIO>
+cd <NOME_DA_PASTA>
+
+# Instale as dependências Python
 pip install -r requirements.txt
-uvicorn gui_server:app --host 127.0.0.1 --port 8000 --reload
-# abre: http://localhost:8000
+
+# Crie e configure o seu ficheiro de configuração
+cp config.example.yaml config.yaml
+# Edite config.yaml e adicione as suas chaves de API da Bitget
+
+# (Opcional mas recomendado) Faça o backfill inicial de dados para um par
+# Execute o script bitget_backfill.py ou use a UI mais tarde
+
+# Inicie o servidor FastAPI
+uvicorn gui_server:app --reload
 ```
+O backend estará agora a correr em `http://127.0.0.1:8000`.
 
-## 📂 Estrutura
-- `gui_server.py` — FastAPI (endpoints + arrancar jobs + ETAs + LLM via Ollama)
-- `web/` — GUI moderna com dashboards
-- `config.yaml` — modo, sizing, fees, risco, ML, **tuning ranges**
-- `backtest.py` / `gridsearch.py` / `walkforward.py`
-- `ml_train.py` / `ml_bt.py` / `ml_optuna.py`
-- `indicators.py` / `features.py` / `sizing.py` / `broker_futures_paper.py` / `metrics.py`
-- `executor_bitget.py` — stub de integração LIVE (Bitget, via ccxt)
+### 2. Configuração do Frontend
+Num novo terminal:
+```bash
+# Navegue para a pasta da aplicação web
+cd webapp
 
-## 🧭 Paper vs Live
-Escolhe no GUI **Modo persistente** (grava em `config.yaml`). O botão **Flatten (panic)** fecha posições (LIVE).
+# Instale as dependências Node.js
+npm install
 
-## 🔧 Tuning & Estratégia
-- Indicadores extra: **Stochastic/CCI/MACD/Supertrend/Keltner**, além de EMA/RSI/ADX/BB/Donchian/ATR.
-- SL/TP styles: `atr_fixed`, `atr_trailing`, `chandelier`, `supertrend`, `keltner`, `breakeven_then_trail`.
-- Ranges em `config.yaml:tuning`.
-
-## 🤖 ML (GPU + Optuna)
-- `ml_train.py` treina MLP (P(subida), P(descida)) usando features 5m + regimes.
-- `ml_bt.py` faz backtest sobre as probabilidades (com SL/TP em ATR).
-- `ml_optuna.py` usa TODAS as GPUs (se houver) e maximiza **Sharpe** OOS (~1/3).
-
-## ⏱️ Progresso e ETA
-Todos os jobs escrevem `data/progress/job_*.json` com `{total, done, elapsed_sec, eta_sec}`. O GUI mostra barras com **ETA**.
-
-## 📈 Dashboards & Pareto
-- Equity & Drawdown, histograma PnL, OOS equity (WF), leaderboard (Grid), heatmap PnL, overlay equity+trades.
-
-## 🔒 Notas
-- Chaves no GUI são mascaradas; patchs LLM criam backup `.bak`.
-- Recomendo correres com **dados preenchidos** (candles 5m) via `db_sqlite` + backfill (tu adicionas as tuas credenciais Bitget e backfill por `ccxt`).
-
-Boa sorte e bons trades! 🟢
-
-## 📄 Relatório HTML
-Cada backtest gera `report.html` na pasta da run (equity, DD, KPIs, histograma PnL e heatmap DOW×HOUR).
-
-
-## 🔗 Bitget — Pares & Backfill
-No GUI podes listar pares USDT Perp da Bitget e fazer backfill 5m on‑demand para um DB por par (`data/db/<PAR>_5m.db`). Depois basta carregar "Usar no config".
-
-
-## 📘 ML Optuna Report
-Cada corrida grava `data/ml_optuna/<ts>/trials.csv` e `report.html` (best‑so‑far, top 20 e parâmetros).
-
-
-## 🧩 Snapshots de config
-Cria snapshots do `config.yaml` e faz rollback pelo GUI.
-
-
-## 🟢 Live Monitor
-Painel em tempo‑real (modo **live**) com preço, posições, ordens, funding e controlos: Buy/Sell MKT (reduce‑only), Set Leverage, Cancel All e Flatten.
-
-
-## 📦 Perfis de Estratégia
-Exporta/Importa/Aplica perfis (risk, sizing, fees, ml, symbol/db) a partir do GUI, com snapshots e rollback.
-
-
-## 📘 ML Backtest Report
-Cada `ml_bt.py` gera `data/ml_bt/report.html` com Equity/Drawdown/Histograma de PnL.
-
-
-
-## ⚙️ Risk Limits (config.yaml)
-```yaml
-risk_limits:
-  max_leverage: 10
-  max_order_usd: 50000
-  max_daily_loss_pct: 5.0
+# Inicie o servidor de desenvolvimento Vite
+npm run dev
 ```
-Ordens live respeitam estes limites (bloqueadas se excederem).
+O frontend estará agora acessível em `http://localhost:5173`.
 
-## 🔌 Live WebSocket
-- Botão **WS Start** no Live Monitor liga ao `/ws/price` que subscreve o **Bitget WS** (ticker). Fallback por polling continua disponível.
+A interface irá ligar-se automaticamente ao backend através do proxy configurado no Vite.
 
-## 🧾 Tipos de Ordem (Live)
-- **Market**, **Limit** (post-only opcional), **Stop**, **Take Profit**, **Stop Loss** (com `stopPrice`).
-- Flag **reduce-only** disponível.
+---
 
-## 🔔 Alertas
-- Regras simples (ex.: preço `>` valor), com **som** opcional.
+## 🗺️ Próximos Passos do Roadmap
+
+*   **Página de Detalhe do Bot:** Uma vista dedicada para cada bot com gráficos de performance, histórico de trades e logs.
+*   **Dashboard Principal:** Um ecrã de entrada que agrega as informações mais importantes: balanço da conta, performance dos bots e alertas.
+*   **Suporte Multi-Exchange:** Abstrair a lógica de conexão para facilitar a adição de outras exchanges, como a Binance.
