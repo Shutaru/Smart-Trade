@@ -17,7 +17,7 @@
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
-      "ms-python.python"
+      "ms-python.python",
       "esbenp.prettier-vscode"
     ];
 
@@ -26,26 +26,26 @@
       enable = true;
       previews = {
         web = {
-          command = ["cd" "webapp" "&&" "npm" "run" "dev" "--" "--port" "$PORT"];
+          # Installs dependencies and runs the dev server
+          command = [
+            "cd" "webapp" "&&" 
+            "npm" "install" "&&" 
+            "npm" "run" "dev" "--" "--port" "$PORT" "--host" "0.0.0.0"
+          ];
           manager = "web";
         };
         backend = {
-          # Usar o python -m para garantir que o uvicorn correto é encontrado
-          command = ["python" "-m" "uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000" "--reload"];
+          # Installs dependencies and runs the FastAPI server
+          command = [
+            "pip" "install" "-r" "requirements.txt" "&&" 
+            "python" "-m" "uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000" "--reload"
+          ];
           manager = "process";
         };
       };
     };
-
-    # Workspace lifecycle hooks
-    workspace = {
-      # Runs when a workspace is first created
-      onCreate = {
-        pip-install = "pip install -r requirements.txt";
-        npm-install = "cd webapp && npm install";
-      };
-      # Runs when the workspace is (re)started
-      onStart = {};
-    };
+    
+    # Workspace lifecycle hooks can be left empty as commands are now in previews
+    workspace = {};
   };
 }
