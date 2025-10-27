@@ -15,7 +15,7 @@ import { Link } from 'react-router-dom';
 
 const fetchBots = async () => {
     const { data } = await api.get('/api/bots/list');
-    return data;
+    return data.bots || []; // Corrigir para acessar o array de bots
 };
 
 const controlBot = (action: 'start' | 'stop' | 'pause', botId: number) => {

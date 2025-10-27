@@ -10,7 +10,10 @@ import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
 
-const fetchProfiles = async () => { const { data } = await api.get('/api/profile/list'); return data; };
+const fetchProfiles = async () => { 
+    const { data } = await api.get('/api/profile/list'); 
+    return data.profiles || []; // Corrigir para acessar o array de profiles
+};
 const applyProfile = (path: string) => api.post('/api/profile/apply', null, { params: { path } });
 const exportProfile = (name: string) => api.post('/api/profile/export', null, { params: { name } });
 const importProfile = (text: string) => api.post('/api/profile/import_text', { text });
@@ -50,12 +53,12 @@ const Profiles: React.FC = () => {
             <div className="space-y-8">
                 <Card className="shadow-soft">
                     <CardHeader><CardTitle>Export Profile</CardTitle></CardHeader>
-                    <CardContent><Input value={exportName} onChange={(e) => setExportName(e.target.value)} placeholder="New profile name..." /></CardContent>
+                    <CardContent><Input value={exportName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setExportName(e.target.value)} placeholder="New profile name..." /></CardContent>
                     <CardFooter><Button onClick={() => exportMutation.mutate(exportName)} disabled={exportMutation.isPending || !exportName}>Export Current Config</Button></CardFooter>
                 </Card>
                 <Card className="shadow-soft">
                     <CardHeader><CardTitle>Import Profile</CardTitle></CardHeader>
-                    <CardContent><Textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Paste YAML config here..." /></CardContent>
+                    <CardContent><Textarea value={importText} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setImportText(e.target.value)} placeholder="Paste YAML config here..." /></CardContent>
                     <CardFooter><Button onClick={() => importMutation.mutate(importText)} disabled={importMutation.isPending || !importText}>Import</Button></CardFooter>
                 </Card>
             </div>

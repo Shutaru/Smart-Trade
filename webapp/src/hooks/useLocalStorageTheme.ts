@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
-export const useLocalStorageTheme = () => {
+export const useLocalStorageTheme = (): [string, Dispatch<SetStateAction<string>>] => {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
 
   useEffect(() => {

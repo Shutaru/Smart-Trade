@@ -33,11 +33,11 @@ const GridSearchCard: React.FC = () => {
                 }} className="space-y-4">
                     <div>
                         <Label htmlFor="days-grid">Days</Label>
-                        <Input id="days-grid" type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))} />
+                        <Input id="days-grid" type="number" value={days} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDays(parseInt(e.target.value))} />
                     </div>
                     <div>
                         <Label htmlFor="maxCombos">Max Combos</Label>
-                        <Input id="maxCombos" type="number" value={maxCombos} onChange={(e) => setMaxCombos(parseInt(e.target.value))} />
+                        <Input id="maxCombos" type="number" value={maxCombos} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMaxCombos(parseInt(e.target.value))} />
                     </div>
                 </form>
             </CardContent>

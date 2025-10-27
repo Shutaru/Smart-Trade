@@ -39,11 +39,11 @@ const Backfill: React.FC = () => {
                 }} className="space-y-4">
                     <div>
                         <Label htmlFor="symbol-backfill">Symbol</Label>
-                        <Input id="symbol-backfill" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="e.g., BTC/USDT" />
+                        <Input id="symbol-backfill" value={symbol} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSymbol(e.target.value)} placeholder="e.g., BTC/USDT" />
                     </div>
                     <div>
                         <Label htmlFor="days-backfill">Days</Label>
-                        <Input id="days-backfill" type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))} />
+                        <Input id="days-backfill" type="number" value={days} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDays(parseInt(e.target.value))} />
                     </div>
                 </form>
             </CardContent>

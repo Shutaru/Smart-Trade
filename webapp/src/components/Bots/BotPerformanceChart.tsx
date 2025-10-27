@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import { Card, CardContent } from "@/components/ui/card";
 
 interface BotPerformanceChartProps {
@@ -8,8 +8,8 @@ interface BotPerformanceChartProps {
 
 const BotPerformanceChart: React.FC<BotPerformanceChartProps> = ({ data }) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const chart = useRef<IChartApi>();
-    const lineSeries = useRef<ISeriesApi<'Line'>>();
+    const chart = useRef<IChartApi | undefined>(undefined);
+    const lineSeries = useRef<ISeriesApi<'Line'> | undefined>(undefined);
 
     useEffect(() => {
         if (chartContainerRef.current && data.length > 0) {

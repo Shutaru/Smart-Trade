@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 const fetchPairs = async () => {
     const { data } = await api.get('/api/bitget/pairs');
-    return data;
+    return data.symbols || []; // Corrigir para acessar o array de símbolos
 };
 
 const setSymbol = (symbol: string) => {
@@ -56,16 +56,17 @@ const PairsList: React.FC = () => {
                                 {isLoading ? (
                                     <CommandItem>Loading...</CommandItem>
                                 ) : (
-                                    pairs?.map((pair: any) => (
+                                    pairs?.map((symbol: string) => (
                                         <CommandItem
-                                            key={pair.symbol}
-                                            onSelect={() => {
-                                                setSelectedPair(pair.symbol);
+                                            key={symbol}
+                                            value={symbol}
+                                            onSelect={(currentValue) => {
+                                                setSelectedPair(currentValue);
                                                 setOpen(false);
                                             }}
                                         >
-                                            <Check className={cn("mr-2 h-4 w-4", selectedPair === pair.symbol ? "opacity-100" : "opacity-0")} />
-                                            {pair.symbol}
+                                            <Check className={cn("mr-2 h-4 w-4", selectedPair === symbol ? "opacity-100" : "opacity-0")} />
+                                            {symbol}
                                         </CommandItem>
                                     ))
                                 )}

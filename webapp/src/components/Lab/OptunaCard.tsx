@@ -33,11 +33,11 @@ const OptunaCard: React.FC = () => {
                 }} className="space-y-4">
                     <div>
                         <Label htmlFor="trials">Trials</Label>
-                        <Input id="trials" type="number" value={trials} onChange={(e) => setTrials(parseInt(e.target.value))} />
+                        <Input id="trials" type="number" value={trials} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTrials(parseInt(e.target.value))} />
                     </div>
                     <div>
                         <Label htmlFor="days-optuna">Days</Label>
-                        <Input id="days-optuna" type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))} />
+                        <Input id="days-optuna" type="number" value={days} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDays(parseInt(e.target.value))} />
                     </div>
                 </form>
             </CardContent>

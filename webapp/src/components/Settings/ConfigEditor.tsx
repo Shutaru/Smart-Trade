@@ -4,6 +4,7 @@ import api from '@/lib/api';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import JSONEditor from 'react-json-editor-ajrm';
+// @ts-ignore
 import locale from 'react-json-editor-ajrm/locale/en';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';

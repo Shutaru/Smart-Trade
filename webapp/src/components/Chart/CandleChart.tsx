@@ -1,4 +1,4 @@
-import { createChart, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import React, { useEffect, useRef } from 'react';
 import { useCandles } from '@/hooks/useCandles';
 import { useWS } from '@/hooks/useWS';
@@ -7,8 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const CandleChart: React.FC = () => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi>();
-  const candleSeries = useRef<ISeriesApi<'Candlestick'>>();
+  const chart = useRef<IChartApi | undefined>(undefined);
+  const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
   const { data: initialData, isLoading } = useCandles();
 
   useEffect(() => {

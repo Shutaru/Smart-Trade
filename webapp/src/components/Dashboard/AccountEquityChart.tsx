@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -24,8 +24,8 @@ const mockEquityData: EquityData[] = Array.from({ length: 100 }, (_, i) => ({
 
 const AccountEquityChart: React.FC = () => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const chart = useRef<IChartApi>();
-    const areaSeries = useRef<ISeriesApi<'Area'>>();
+    const chart = useRef<IChartApi | undefined>(undefined);
+    const areaSeries = useRef<ISeriesApi<'Area'> | undefined>(undefined);
     
     // Para desenvolvimento, vamos usar os dados de exemplo.
     // Para ligar à API, basta remover a propriedade `initialData`.

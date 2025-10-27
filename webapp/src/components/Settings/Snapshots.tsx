@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const fetchSnapshots = async () => {
     const { data } = await api.get('/api/config/snapshots');
-    return data;
+    return data.snapshots || []; // Corrigir para acessar o array de snapshots
 };
 
 const createSnapshot = () => {

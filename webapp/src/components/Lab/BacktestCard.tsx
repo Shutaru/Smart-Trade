@@ -31,7 +31,7 @@ const BacktestCard: React.FC = () => {
                     mutation.mutate({ days });
                 }}>
                     <Label htmlFor="days-backtest">Days</Label>
-                    <Input id="days-backtest" type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))} />
+                    <Input id="days-backtest" type="number" value={days} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDays(parseInt(e.target.value))} />
                 </form>
             </CardContent>
             <CardFooter>

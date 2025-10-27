@@ -15,7 +15,7 @@ import { PlusCircle } from 'lucide-react';
 
 const fetchProfiles = async () => {
     const { data } = await api.get('/api/profile/list');
-    return data;
+    return data.profiles || []; // Corrigir para acessar o array de profiles
 };
 
 const createBot = (newBot: any) => {
@@ -23,9 +23,9 @@ const createBot = (newBot: any) => {
 };
 
 const botSchema = z.object({
-    name: z.string().min(3, "O nome deve ter pelo menos 3 caracteres."),
-    profile: z.string({ required_error: "Selecione uma estratégia." }),
-    mode: z.enum(["paper", "live"], { required_error: "Selecione um modo de operação." }),
+    name: z.string({ message: "O nome deve ter pelo menos 3 caracteres." }).min(3, "O nome deve ter pelo menos 3 caracteres."),
+    profile: z.string({ message: "Selecione uma estratégia." }),
+    mode: z.enum(["paper", "live"], { message: "Selecione um modo de operação." }),
 });
 
 type BotFormValues = z.infer<typeof botSchema>;
