@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+pyyaml
+numpy
+pandas
+plotly
+ccxt
+scikit-learn
+joblib
+optuna
+requests
+torch
+websockets>=11.0.3
