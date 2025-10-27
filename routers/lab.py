@@ -4,7 +4,8 @@ from typing import List
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
-    RunResponse, RunStatus, StrategyConfig, ValidateStrategyResponse
+    RunResponse, RunStatus, StrategyConfig, ValidateStrategyResponse,
+    BackfillRequest, BackfillResponse, BackfillResult
 )
 from lab_indicators import get_indicator_catalog, get_indicator, validate_indicator_params
 
@@ -241,6 +242,170 @@ async def validate_strategy(config: StrategyConfig):
             features_required=[],
             errors=[f"Validation error: {str(e)}"]
         )
+
+
+@router.post("/backfill", response_model=BackfillResponse)
+async def backfill_data(request: BackfillRequest):
+    """
+    Backfill OHLCV data and calculate features
+    
+    For each symbol and timeframe:
+    1. Fetch OHLCV data from exchange via CCXT
+    2. Store in SQLite database
+    3. Calculate technical indicators
+    4. Store features in database
+    
+    Args:
+        request: BackfillRequest with exchange, symbols, timeframes, date range
+    
+    Returns:
+        BackfillResponse with counts of inserted candles and features per symbol/timeframe
+    
+    Raises:
+        400: Invalid parameters
+        429: Rate limit exceeded
+        503: Exchange unavailable
+    """
+    import ccxt
+    import pandas as pd
+    from ccxt.base.errors import RateLimitExceeded, RequestTimeout, ExchangeNotAvailable, NetworkError
+    from lab_features import calculate_features, features_to_rows
+    
+    try:
+        # Initialize exchange
+        if request.exchange == "bitget":
+            ex = ccxt.bitget({"options": {"defaultType": "swap"}})
+        elif request.exchange == "binance":
+            ex = ccxt.binance({"options": {"defaultType": "future"}})
+        else:
+            raise HTTPException(400, f"Unsupported exchange: {request.exchange}")
+        
+        # Collect all timeframes to process
+        all_timeframes = [request.timeframe] + request.higher_tf
+        
+        results = []
+        total_candles = 0
+        total_features = 0
+        
+        # Process each symbol
+        for symbol in request.symbols:
+            # Process each timeframe for this symbol
+            for tf in all_timeframes:
+                try:
+                    # Fetch OHLCV data
+                    all_candles = []
+                    current_since = request.since
+                    
+                    while current_since < request.until:
+                        try:
+                            candles = ex.fetch_ohlcv(
+                                symbol,
+                                timeframe=tf,
+                                since=current_since,
+                                limit=1000
+                            )
+                        except RateLimitExceeded:
+                            raise HTTPException(429, f"Rate limit exceeded for {request.exchange}")
+                        except (RequestTimeout, NetworkError) as e:
+                            raise HTTPException(503, f"Exchange temporarily unavailable: {str(e)}")
+                        except ExchangeNotAvailable as e:
+                            raise HTTPException(503, f"Exchange not available: {str(e)}")
+                        
+                        if not candles:
+                            break
+                        
+                        all_candles.extend(candles)
+                        current_since = candles[-1][0] + 1
+                        
+                        if len(candles) < 1000:
+                            break
+                    
+                    # Filter candles within range
+                    all_candles = [c for c in all_candles if request.since <= c[0] < request.until]
+                    
+                    if not all_candles:
+                        results.append(BackfillResult(
+                            symbol=symbol,
+                            timeframe=tf,
+                            candles_inserted=0,
+                            features_inserted=0,
+                            db_path="N/A"
+                        ))
+                        continue
+                    
+                    # Get database path and connection
+                    db_path = db_sqlite.get_db_path(request.exchange, symbol, tf)
+                    conn = db_sqlite.connect(db_path, tf)
+                    
+                    # Prepare candles for insertion: (ts, open, high, low, close, volume)
+                    candle_rows = [
+                        (int(c[0]), float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5]))
+                        for c in all_candles
+                    ]
+                    
+                    # Insert candles
+                    db_sqlite.insert_candles_bulk(conn, tf, candle_rows)
+                    candles_inserted = len(candle_rows)
+                    
+                    # Calculate features
+                    features_inserted = 0
+                    try:
+                        # Create DataFrame for feature calculation
+                        df = pd.DataFrame(all_candles, columns=['ts', 'open', 'high', 'low', 'close', 'volume'])
+                        
+                        # Calculate features
+                        if len(df) >= 200:
+                            features_df = calculate_features(df)
+                            feature_rows = features_to_rows(features_df)
+                            
+                            # Insert features
+                            db_sqlite.insert_features_bulk(conn, tf, feature_rows)
+                            features_inserted = len(feature_rows)
+                        else:
+                            print(f"Warning: Not enough data for features ({len(df)} < 200 candles) for {symbol} {tf}")
+                    
+                    except Exception as e:
+                        print(f"Warning: Feature calculation failed for {symbol} {tf}: {str(e)}")
+                    
+                    conn.close()
+                    
+                    # Add result
+                    results.append(BackfillResult(
+                        symbol=symbol,
+                        timeframe=tf,
+                        candles_inserted=candles_inserted,
+                        features_inserted=features_inserted,
+                        db_path=db_path
+                    ))
+                    
+                    total_candles += candles_inserted
+                    total_features += features_inserted
+                
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    # Continue with other symbols/timeframes on error
+                    print(f"Error processing {symbol} {tf}: {str(e)}")
+                    results.append(BackfillResult(
+                        symbol=symbol,
+                        timeframe=tf,
+                        candles_inserted=0,
+                        features_inserted=0,
+                        db_path=f"Error: {str(e)}"
+                    ))
+        
+        return BackfillResponse(
+            success=True,
+            message=f"Backfilled {len(request.symbols)} symbols across {len(all_timeframes)} timeframes",
+            results=results,
+            total_candles=total_candles,
+            total_features=total_features
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Backfill error: {str(e)}")
 
 
 @router.get("/runs", response_model=List[RunStatus])

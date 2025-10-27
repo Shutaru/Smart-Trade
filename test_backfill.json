@@ -1,0 +1,8 @@
+{
+  "exchange": "bitget",
+  "symbols": ["BTC/USDT:USDT"],
+  "timeframe": "5m",
+  "since": 1735689600000,
+  "until": 1735776000000,
+  "higher_tf": ["1h"]
+}

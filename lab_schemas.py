@@ -125,6 +125,34 @@ class ValidateStrategyResponse(BaseModel):
     errors: List[str] = Field(default_factory=list)
 
 
+class BackfillRequest(BaseModel):
+    """Request to backfill data for specific symbols and timeframes"""
+    exchange: str = Field(..., description="Exchange name (bitget, binance)")
+    symbols: List[str] = Field(..., description="List of symbols to backfill")
+    timeframe: str = Field(..., description="Base timeframe (5m, 15m, 1h, etc)")
+    since: int = Field(..., description="Start timestamp (Unix milliseconds)")
+    until: int = Field(..., description="End timestamp (Unix milliseconds)")
+    higher_tf: List[str] = Field(default_factory=list, description="Additional higher timeframes")
+
+
+class BackfillResult(BaseModel):
+    """Result for a single symbol/timeframe combination"""
+    symbol: str
+    timeframe: str
+    candles_inserted: int
+    features_inserted: int
+    db_path: str
+
+
+class BackfillResponse(BaseModel):
+    """Response from backfill endpoint"""
+    success: bool
+    message: str
+    results: List[BackfillResult]
+    total_candles: int
+    total_features: int
+
+
 class RunResponse(BaseModel):
     run_id: str
     status: str
