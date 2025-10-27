@@ -615,11 +615,6 @@ def api_runs_list():
     }
 
 
-# ============================= Static UI ================================
-
-# Servir a pasta web/ (index.html)
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
-
 # === OHLCV do DB para o gráfico (candles) ===
 @app.get("/api/candles")
 def api_candles(limit: int = 500, timeframe: str = "5m"):
@@ -646,3 +641,35 @@ def api_candles(limit: int = 500, timeframe: str = "5m"):
     candles = [{"ts": r[0], "o": float(r[1]), "h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "v": float(r[5])} for r in rows]
     return {"symbol": cfg.get("symbol"), "timeframe": timeframe, "candles": candles}
 
+
+# === Static UI (React SPA em webapp/dist) ===
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi import HTTPException
+
+UI_DIR = (Path(__file__).parent / "webapp" / "dist").resolve()
+
+# Servir assets diretamente (melhor performance)
+if UI_DIR.exists():
+    assets_dir = UI_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+else:
+    print(f"[UI] webapp/dist não encontrado ({UI_DIR}). Compila o front com 'npm run build' em webapp/.")
+
+@app.get("/", include_in_schema=False)
+def spa_index():
+    if not UI_DIR.exists():
+        raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
+    return FileResponse(str(UI_DIR / "index.html"))
+
+# Fallback de SPA para qualquer rota que não seja API/WS
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_catch_all(full_path: str):
+    if full_path.startswith("api") or full_path.startswith("ws"):
+        # deixa os endpoints reais responderem
+        raise HTTPException(status_code=404, detail="Endpoint não encontrado")
+    if not UI_DIR.exists():
+        raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
+    return FileResponse(str(UI_DIR / "index.html"))
