@@ -167,3 +167,18 @@ class RunStatus(BaseModel):
     best_score: Optional[float] = None
     started_at: Optional[int] = None
     completed_at: Optional[int] = None
+
+
+class TrialResult(BaseModel):
+    """Result from a single trial"""
+    trial_id: int
+    params: Dict[str, Any]
+    metrics: Dict[str, float]
+    score: float
+
+
+class RunResultsResponse(BaseModel):
+    """Response with trial results for a run"""
+    run_id: str
+    trials: List[TrialResult]
+    total: int
