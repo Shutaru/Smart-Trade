@@ -1,4 +1,4 @@
-# gui_server.py — versão “v12-fix” com aspas escapadas
+# gui_server.py — versão "v12-fix" com aspas escapadas
 import os
 import sys
 import time
@@ -18,6 +18,10 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI(title="BTC5m Bitget GUI Suite")
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Registrar router do Strategy Lab
+from routers.lab import router as lab_router
+app.include_router(lab_router)
 
 
 def safe_path(p: str) -> str:
