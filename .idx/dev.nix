@@ -1,14 +1,14 @@
 # To learn more about how to use Nix to configure your environment
 # see: https://firebase.google.com/docs/studio/customize-workspace
-{
+{ pkgs, ... }: {
   # Which nixpkgs channel to use.
   channel = "stable-24.05"; # or "unstable"
 
   # Use https://search.nixos.org/packages to find packages
-  pkgs = [
-    "python311"
-    "python311Packages.pip"
-    "nodejs_20"
+  packages = [
+    pkgs.python311
+    pkgs.python311Packages.pip
+    pkgs.nodejs_20
   ];
 
   # Sets environment variables in the workspace
@@ -30,7 +30,8 @@
           manager = "web";
         };
         backend = {
-          command = ["uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000"];
+          # Usar o python -m para garantir que o uvicorn correto é encontrado
+          command = ["python" "-m" "uvicorn" "gui_server:app" "--host" "0.0.0.0" "--port" "8000" "--reload"];
           manager = "process";
         };
       };

@@ -1,11 +1,12 @@
+import React from 'react'; // <-- 1. ADICIONA O REACT PARA RESOLVER OS 6 ERROS
 import { Toaster as Sonner } from "sonner"
-import { useLocalStorageTheme } from '@/hooks/useLocalStorageTheme';
+import { useLocalStorageTheme } from '@/hooks/useLocalStorageTheme'; // <-- 2. USA O NOSSO HOOK DE TEMA
 import { CircleCheck, Info, TriangleAlert, OctagonX, LoaderCircle } from "lucide-react"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const [theme] = useLocalStorageTheme()
+  const [theme] = useLocalStorageTheme(); // <-- 3. IMPLEMENTA O NOSSO HOOK
 
   return (
     <Sonner
