@@ -1,5 +1,27 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Union, List, Dict, Any
+from enum import Enum
+
+
+class ConditionOperator(str, Enum):
+    """Supported comparison operators"""
+    GT = ">"
+    LT = "<"
+    GTE = ">="
+    LTE = "<="
+    EQ = "=="
+    BETWEEN = "between"
+    CROSSES_UP = "crosses_up"
+    CROSSES_DOWN = "crosses_down"
+
+
+class ExitRuleKind(str, Enum):
+    """Supported exit rule types"""
+    TP_SL_FIXED = "tp_sl_fixed"
+    ATR_TRAILING = "atr_trailing"
+    CHANDELIER = "chandelier"
+    BB_TARGET = "bb_target"
+    TIME_EXIT = "time_exit"
 
 
 class IndicatorParam(BaseModel):
@@ -10,16 +32,16 @@ class IndicatorParam(BaseModel):
 class Condition(BaseModel):
     indicator: str
     timeframe: str
-    op: str
+    op: ConditionOperator
     lookback: Optional[int] = None
-    params: List[IndicatorParam] = []
+    params: List[IndicatorParam] = Field(default_factory=list)
     rhs: Optional[float] = None
     rhs_indicator: Optional[str] = None
-    rhs_params: List[IndicatorParam] = []
+    rhs_params: List[IndicatorParam] = Field(default_factory=list)
 
 
 class ExitRule(BaseModel):
-    kind: str
+    kind: ExitRuleKind
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -30,6 +52,14 @@ class StrategySide(BaseModel):
 
 
 class Objective(BaseModel):
+    """
+    Objective function to optimize
+    
+    Allowed variables:
+    - sharpe, sortino, calmar
+    - total_profit, max_dd, win_rate
+    - profit_factor, avg_trade, trades, exposure
+    """
     expression: str
 
 
@@ -43,7 +73,7 @@ class DataSpec(BaseModel):
 
 
 class RiskSpec(BaseModel):
-    leverage: Union[tuple, float] = 3.0
+    leverage: Union[float, tuple] = 3.0
     position_sizing: str = "fixed_usd"
     size_value: float = 1000.0
     max_concurrent_positions: int = 1
@@ -54,8 +84,8 @@ class ParamRange(BaseModel):
     low: float
     high: float
     step: Optional[float] = None
-    log: Optional[bool] = None
-    int_: Optional[bool] = None
+    log: Optional[bool] = False
+    int_: Optional[bool] = False
 
 
 class StrategyConfig(BaseModel):
@@ -89,34 +119,10 @@ class IndicatorCatalogResponse(BaseModel):
     indicators: List[IndicatorInfo]
 
 
-class BackfillRequest(BaseModel):
-    exchange: str
-    symbol: str
-    timeframe: str
-    since: int
-    until: int
-    higher_tf: List[str] = Field(default_factory=lambda: ["1h", "4h"])
-
-
-class BackfillResponse(BaseModel):
-    success: bool
-    message: str
-    candles_downloaded: int
-    db_path: str
-
-
 class ValidateStrategyResponse(BaseModel):
     valid: bool
     features_required: List[str]
     errors: List[str] = Field(default_factory=list)
-
-
-class RunRequest(BaseModel):
-    strategy: StrategyConfig
-    mode: str
-    n_trials: Optional[int] = None
-    timeout_seconds: Optional[int] = None
-    seed: Optional[int] = None
 
 
 class RunResponse(BaseModel):
@@ -133,16 +139,3 @@ class RunStatus(BaseModel):
     best_score: Optional[float] = None
     started_at: Optional[int] = None
     completed_at: Optional[int] = None
-
-
-class TrialResult(BaseModel):
-    trial_id: int
-    params: Dict[str, Any]
-    metrics: Dict[str, float]
-    score: float
-
-
-class RunResultsResponse(BaseModel):
-    run_id: str
-    trials: List[TrialResult]
-    total: int

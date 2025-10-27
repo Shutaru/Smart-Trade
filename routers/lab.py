@@ -2,8 +2,11 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 import db_sqlite
-from lab_schemas import ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse, RunResponse, RunStatus
-from lab_indicators import get_indicator_catalog
+from lab_schemas import (
+    ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
+    RunResponse, RunStatus, StrategyConfig, ValidateStrategyResponse
+)
+from lab_indicators import get_indicator_catalog, get_indicator, validate_indicator_params
 
 router = APIRouter(prefix="/api/lab", tags=["lab"])
 
@@ -68,25 +71,14 @@ async def get_symbols(exchange: str = "bitget", market: str = "futures"):
         # Filter: only USDT perpetual linear futures
         symbols = []
         for symbol, market_info in markets.items():
-            # Check if it's a perpetual swap
             is_perpetual = market_info.get("type") == "swap"
-            
-            # Check if it's linear (not inverse)
             is_linear = market_info.get("linear", True)
-            
-            # Check if it's USDT quoted
-            is_usdt = (
-                "USDT" in symbol and
-                (market_info.get("quote") == "USDT" or "/USDT" in symbol)
-            )
-            
-            # Check if it's active
+            is_usdt = "USDT" in symbol and (market_info.get("quote") == "USDT" or "/USDT" in symbol)
             is_active = market_info.get("active", True)
             
             if is_perpetual and is_linear and is_usdt and is_active:
                 symbols.append(symbol)
         
-        # Sort alphabetically
         symbols.sort()
         
         if not symbols:
@@ -98,10 +90,8 @@ async def get_symbols(exchange: str = "bitget", market: str = "futures"):
         return {"symbols": symbols}
         
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        # Catch-all for unexpected errors
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error fetching symbols from {exchange}: {str(e)}"
@@ -111,7 +101,6 @@ async def get_symbols(exchange: str = "bitget", market: str = "futures"):
 @router.get("/indicators", response_model=IndicatorCatalogResponse)
 async def get_indicators():
     """Return indicators catalog"""
-    from lab_indicators import get_indicator_catalog
     from lab_schemas import IndicatorInfo
     
     catalog = get_indicator_catalog()
@@ -125,6 +114,133 @@ async def get_indicators():
             description=ind["description"]
         ))
     return {"indicators": indicators}
+
+
+@router.post("/strategy/validate", response_model=ValidateStrategyResponse)
+async def validate_strategy(config: StrategyConfig):
+    """
+    Validate strategy configuration and return required features
+    
+    Checks:
+    - Indicators exist and are valid
+    - Timeframes are supported
+    - Parameters are within valid ranges
+    - Objective expression is safe
+    - Exit rules are valid
+    
+    Returns:
+    - valid: bool - Whether strategy is valid
+    - features_required: List[str] - Required features (e.g., ['rsi_5m', 'ema_1h'])
+    - errors: List[str] - Validation errors if any
+    """
+    from lab_objective import objective_evaluator
+    
+    errors = []
+    features_required = set()
+    
+    try:
+        # Validate objective expression
+        valid, msg = objective_evaluator.validate(config.objective.expression)
+        if not valid:
+            errors.append(f"Invalid objective: {msg}")
+        
+        # Validate long side conditions
+        for cond in config.long.entry_all + config.long.entry_any:
+            indicator = get_indicator(cond.indicator)
+            if not indicator:
+                errors.append(f"Indicator '{cond.indicator}' not found")
+                continue
+            
+            if cond.timeframe not in indicator["supported_timeframes"]:
+                errors.append(
+                    f"Timeframe '{cond.timeframe}' not supported for indicator '{cond.indicator}'. "
+                    f"Supported: {indicator['supported_timeframes']}"
+                )
+            
+            params_dict = {p.name: p.value for p in cond.params}
+            valid, msg = validate_indicator_params(cond.indicator, params_dict)
+            if not valid:
+                errors.append(f"Long side: {msg}")
+            
+            features_required.add(f"{cond.indicator}_{cond.timeframe}")
+            
+            if cond.rhs_indicator:
+                rhs_indicator = get_indicator(cond.rhs_indicator)
+                if not rhs_indicator:
+                    errors.append(f"RHS indicator '{cond.rhs_indicator}' not found")
+                else:
+                    rhs_params_dict = {p.name: p.value for p in cond.rhs_params}
+                    valid, msg = validate_indicator_params(cond.rhs_indicator, rhs_params_dict)
+                    if not valid:
+                        errors.append(f"Long side RHS: {msg}")
+                    
+                    rhs_feature = f"{cond.rhs_indicator}_{cond.timeframe}"
+                    features_required.add(rhs_feature)
+        
+        # Validate short side conditions
+        for cond in config.short.entry_all + config.short.entry_any:
+            indicator = get_indicator(cond.indicator)
+            if not indicator:
+                errors.append(f"Indicator '{cond.indicator}' not found")
+                continue
+            
+            if cond.timeframe not in indicator["supported_timeframes"]:
+                errors.append(
+                    f"Timeframe '{cond.timeframe}' not supported for indicator '{cond.indicator}'. "
+                    f"Supported: {indicator['supported_timeframes']}"
+                )
+            
+            params_dict = {p.name: p.value for p in cond.params}
+            valid, msg = validate_indicator_params(cond.indicator, params_dict)
+            if not valid:
+                errors.append(f"Short side: {msg}")
+            
+            features_required.add(f"{cond.indicator}_{cond.timeframe}")
+            
+            if cond.rhs_indicator:
+                rhs_indicator = get_indicator(cond.rhs_indicator)
+                if not rhs_indicator:
+                    errors.append(f"RHS indicator '{cond.rhs_indicator}' not found")
+                else:
+                    rhs_params_dict = {p.name: p.value for p in cond.rhs_params}
+                    valid, msg = validate_indicator_params(cond.rhs_indicator, rhs_params_dict)
+                    if not valid:
+                        errors.append(f"Short side RHS: {msg}")
+                    
+                    rhs_feature = f"{cond.rhs_indicator}_{cond.timeframe}"
+                    features_required.add(rhs_feature)
+        
+        # Validate exit rules
+        valid_exit_kinds = ["tp_sl_fixed", "atr_trailing", "chandelier", "bb_target", "time_exit"]
+        for rule in config.long.exit_rules + config.short.exit_rules:
+            if rule.kind not in valid_exit_kinds:
+                errors.append(f"Invalid exit rule kind: '{rule.kind}'. Valid: {valid_exit_kinds}")
+        
+        # Validate risk parameters
+        if isinstance(config.risk.leverage, tuple):
+            if len(config.risk.leverage) != 2 or config.risk.leverage[0] > config.risk.leverage[1]:
+                errors.append("Leverage tuple must be (min, max) with min <= max")
+        elif config.risk.leverage <= 0:
+            errors.append("Leverage must be positive")
+        
+        if config.risk.size_value <= 0:
+            errors.append("Position size must be positive")
+        
+        if config.risk.max_concurrent_positions < 1:
+            errors.append("Max concurrent positions must be at least 1")
+        
+        return ValidateStrategyResponse(
+            valid=len(errors) == 0,
+            features_required=sorted(list(features_required)),
+            errors=errors
+        )
+    
+    except Exception as e:
+        return ValidateStrategyResponse(
+            valid=False,
+            features_required=[],
+            errors=[f"Validation error: {str(e)}"]
+        )
 
 
 @router.get("/runs", response_model=List[RunStatus])
