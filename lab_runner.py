@@ -252,13 +252,29 @@ def get_run_results(run_id: str, limit: int = 100, offset: int = 0):
     
     results = []
     for trial in trials:
-        results.append({
-            'trial_id': trial['trial_number'],
-            'params': json.loads(trial['params_json']),
-            'metrics': json.loads(trial['metrics_json']),
-            'score': trial['score'],
-            'created_at': trial['created_at']
-        })
+        try:
+            # Safely parse JSON strings
+            params = json.loads(trial['params_json']) if trial['params_json'] else {}
+            metrics = json.loads(trial['metrics_json']) if trial['metrics_json'] else {}
+            
+            results.append({
+                'trial_id': trial['trial_number'],
+                'params': params,
+                'metrics': metrics,
+                'score': trial['score'],
+                'created_at': trial['created_at']
+            })
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            # Log error but continue processing other trials
+            print(f"[get_run_results] Error parsing trial {trial.get('id', 'unknown')}: {e}")
+            # Add trial with empty data instead of failing completely
+            results.append({
+                'trial_id': trial.get('trial_number', 0),
+                'params': {},
+                'metrics': {},
+                'score': trial.get('score', 0.0),
+                'created_at': trial.get('created_at')
+            })
     
     return results
 
