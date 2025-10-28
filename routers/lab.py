@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 import os
 import json
+import time
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
@@ -128,15 +129,19 @@ async def validate_strategy(config: StrategyConfig):
 
 @router.post("/backfill", response_model=BackfillResponse)
 async def backfill_data(request: BackfillRequest):
-    """Backfill OHLCV data with robust pagination and integrity checks"""
+    """Backfill OHLCV data with robust pagination, retry logic and completeness validation"""
     import ccxt
+    from ccxt.base.errors import RateLimitExceeded, NetworkError
     import pandas as pd
-    import time
     import math
     from lab_features import calculate_features, features_to_rows
     
     try:
-        ex = ccxt.bitget({"options": {"defaultType": "swap"}}) if request.exchange == "bitget" else ccxt.binance({"options": {"defaultType": "future"}})
+        # Initialize exchange with rate limiting
+        if request.exchange == "bitget":
+            ex = ccxt.bitget({"options": {"defaultType": "swap"}, "enableRateLimit": True})
+        else:
+            ex = ccxt.binance({"options": {"defaultType": "future"}, "enableRateLimit": True})
         
         all_timeframes = [request.timeframe] + request.higher_tf
         results = []
@@ -149,6 +154,8 @@ async def backfill_data(request: BackfillRequest):
                     print(f"[Backfill] Starting {symbol} @ {tf}...")
                     start_time = time.time()
                     api_calls = 0
+                    retries = 0
+                    max_retries = 3
                     
                     # Parse timeframe to milliseconds
                     tf_ms = ex.parse_timeframe(tf) * 1000
@@ -157,51 +164,75 @@ async def backfill_data(request: BackfillRequest):
                     current_since = request.since
                     
                     while current_since < request.until:
-                        candles = ex.fetch_ohlcv(symbol, timeframe=tf, since=current_since, limit=1000)
-                        api_calls += 1
-                        
-                        if not candles:
-                            break
-                        
-                        # Deduplicate overlapping candles
-                        candles.sort(key=lambda c: c[0])
-                        if all_candles:
-                            last_ts = all_candles[-1][0]
-                            candles = [c for c in candles if c[0] > last_ts]
-                        
+                        try:
+                            candles = ex.fetch_ohlcv(symbol, timeframe=tf, since=current_since, limit=1000)
+                            api_calls += 1
+                            retries = 0  # Reset on success
+                            
                             if not candles:
-                                # No new candles, advance cursor by 1000 timeframes
-                                current_since += 1000 * tf_ms
-                                continue
+                                break
+                            
+                            # Deduplicate
+                            candles.sort(key=lambda c: c[0])
+                            if all_candles:
+                                last_ts = all_candles[-1][0]
+                                candles = [c for c in candles if c[0] > last_ts]
+                            
+                                if not candles:
+                                    current_since += 1000 * tf_ms
+                                    continue
+                            
+                            all_candles.extend(candles)
+                            
+                            # Advance cursor: +1ms after last candle
+                            last_ts = candles[-1][0]
+                            current_since = last_ts + 1
+                            
+                            if len(candles) < 1000:
+                                break
+                            
+                            # Rate limit
+                            if ex.rateLimit:
+                                time.sleep(ex.rateLimit / 1000.0)
                         
-                        all_candles.extend(candles)
+                        except RateLimitExceeded:
+                            retries += 1
+                            if retries >= max_retries:
+                                raise
+                            wait = ex.rateLimit / 1000.0 + 0.5
+                            print(f"[Backfill] Rate limit, waiting {wait}s (retry {retries}/{max_retries})")
+                            time.sleep(wait)
+                            continue
                         
-                        # Advance cursor: 1 timeframe after last candle
-                        last_ts = candles[-1][0]
-                        current_since = last_ts + tf_ms
-                        
-                        # Break if we got less than limit (end of available data)
-                        if len(candles) < 1000:
-                            break
+                        except NetworkError:
+                            retries += 1
+                            if retries >= max_retries:
+                                raise
+                            print(f"[Backfill] Network error, retrying in 2s (retry {retries}/{max_retries})")
+                            time.sleep(2.0)
+                            continue
                     
-                    # Filter by time range
+                    # Filter by range
                     all_candles = [c for c in all_candles if request.since <= c[0] < request.until]
                     
-                    # Calculate integrity stats
+                    # Integrity check
                     unique_ts = {c[0] for c in all_candles}
                     unique_count = len(unique_ts)
                     expected_count = math.floor((request.until - request.since) / tf_ms)
                     missing_count = max(0, expected_count - unique_count)
                     completeness = round((unique_count / max(1, expected_count)) * 100, 2)
+                    is_complete = completeness >= 98.0
                     
                     elapsed = time.time() - start_time
-                    print(f"[Backfill] {symbol} @ {tf}: {unique_count} candles in {elapsed:.1f}s ({api_calls} API calls)")
-                    print(f"[Backfill] Completeness: {completeness}% (expected ~{expected_count}, missing ~{missing_count})")
+                    status = "✓" if is_complete else "⚠"
+                    print(f"[Backfill] {status} {symbol} @ {tf}: {unique_count} candles in {elapsed:.1f}s ({api_calls} calls)")
+                    print(f"[Backfill]   {completeness}% complete (expected {expected_count}, missing {missing_count})")
                     
                     if not all_candles:
                         results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path="N/A"))
                         continue
                     
+                    # Save
                     db_path = db_sqlite.get_db_path(request.exchange, symbol, tf)
                     conn = db_sqlite.connect(db_path, tf)
                     
@@ -209,6 +240,7 @@ async def backfill_data(request: BackfillRequest):
                     db_sqlite.insert_candles_bulk(conn, tf, candle_rows)
                     candles_inserted = len(candle_rows)
                     
+                    # Features
                     features_inserted = 0
                     if len(candle_rows) >= 200:
                         try:
@@ -219,7 +251,7 @@ async def backfill_data(request: BackfillRequest):
                             features_inserted = len(feature_rows)
                             print(f"[Backfill] Calculated {features_inserted} features")
                         except Exception as e:
-                            print(f"[Backfill] Feature calc error: {e}")
+                            print(f"[Backfill] Feature error: {e}")
                     
                     conn.close()
                     
@@ -229,13 +261,13 @@ async def backfill_data(request: BackfillRequest):
                 
                 except Exception as e:
                     import traceback
-                    print(f"[Backfill] ERROR for {symbol} @ {tf}: {e}")
+                    print(f"[Backfill] ERROR {symbol} @ {tf}: {e}")
                     traceback.print_exc()
                     results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path=f"Error: {e}"))
         
         success_count = sum(1 for r in results if r.candles_inserted > 0)
         message = f"Backfilled {success_count}/{len(results)} combinations. Total: {total_candles} candles"
-        print(f"[Backfill] Complete: {total_candles} candles, {total_features} features")
+        print(f"[Backfill] Done: {total_candles} candles, {total_features} features")
         
         return BackfillResponse(success=True, message=message, results=results, total_candles=total_candles, total_features=total_features)
     
@@ -369,7 +401,6 @@ async def get_run_candles(run_id: str):
     db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
     
     if not os.path.exists(db_path):
-        import time
         now = int(time.time())
         mock_candles = []
         for i in range(100):
@@ -577,7 +608,7 @@ async def download_artifacts(run_id: str):
     artifacts_pattern = os.path.join("artifacts", run_id, "*", "*")
     artifact_files = glob.glob(artifacts_pattern)
     
-    if not artifact_files:
+    if not artifacts_files:
         raise HTTPException(404, "No artifacts found for this run")
     
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
