@@ -570,3 +570,9 @@ async def startup_event():
     loop = asyncio.get_event_loop()
     set_main_loop(loop)
     print("[Startup] Configured lab_runner with main event loop")
+    print(f"[Startup] UI directory: {UI_DIR}")
+    print(f"[Startup] UI exists: {UI_DIR.exists()}")
+    if UI_DIR.exists():
+        print(f"[Startup] ✅ React SPA ready to serve")
+    else:
+        print(f"[Startup] ⚠️  React SPA not built - run 'npm run build' in webapp/")
