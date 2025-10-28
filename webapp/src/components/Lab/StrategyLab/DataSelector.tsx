@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown, X, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, X, Loader2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -16,10 +16,10 @@ interface DataSelectorProps {
   value: {
     exchange: string;
     symbols: string[];
-    timeframe: string;
-    since: number;
+ timeframe: string;
+  since: number;
     until: number;
-    higher_tf: string[];
+ higher_tf: string[];
   };
   onChange: (value: any) => void;
 }
@@ -29,7 +29,6 @@ export function DataSelector({ value, onChange }: DataSelectorProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch exchanges
   const { data: exchangesData } = useQuery({
     queryKey: ['exchanges'],
     queryFn: async () => {
@@ -38,62 +37,75 @@ export function DataSelector({ value, onChange }: DataSelectorProps) {
     }
   });
 
-  // Fetch symbols for selected exchange
   const { data: symbolsData, isLoading: symbolsLoading } = useQuery({
     queryKey: ['symbols', value.exchange],
     queryFn: async () => {
-      const res = await fetch(`/api/lab/symbols?exchange=${value.exchange}`);
+   const res = await fetch(`/api/lab/symbols?exchange=${value.exchange}`);
       return res.json();
     },
     enabled: !!value.exchange
   });
 
-  // Backfill mutation
   const backfillMutation = useMutation({
-    mutationFn: async () => {
+ mutationFn: async () => {
       const res = await fetch('/api/lab/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+ body: JSON.stringify({
           exchange: value.exchange,
-   symbols: value.symbols,
-          timeframe: value.timeframe,
-      since: value.since,
+  symbols: value.symbols,
+ timeframe: value.timeframe,
+          since: value.since,
           until: value.until,
-   higher_tf: value.higher_tf
-        })
-      });
-if (!res.ok) throw new Error('Backfill failed');
-   return res.json();
+          higher_tf: value.higher_tf
+      })
+});
+      if (!res.ok) throw new Error('Backfill failed');
+      return res.json();
     },
     onSuccess: (data) => {
       toast({
-        title: 'Backfill Complete',
+    title: 'Backfill Complete',
         description: `Downloaded ${data.total_candles} candles and calculated ${data.total_features} features`
       });
     },
     onError: () => {
       toast({
-        title: 'Backfill Failed',
-     description: 'Failed to download data',
+     title: 'Backfill Failed',
+        description: 'Failed to download data',
         variant: 'destructive'
-  });
+ });
     }
   });
 
   const filteredSymbols = symbolsData?.symbols?.filter((s: string) =>
     s.toLowerCase().includes(searchQuery.toLowerCase())
-) || [];
+  ) || [];
 
   const toggleSymbol = (symbol: string) => {
     const newSymbols = value.symbols.includes(symbol)
-    ? value.symbols.filter(s => s !== symbol)
+   ? value.symbols.filter(s => s !== symbol)
       : [...value.symbols, symbol];
     onChange({ ...value, symbols: newSymbols });
   };
 
-  const removeSymbol = (symbol: string) => {
-  onChange({ ...value, symbols: value.symbols.filter(s => s !== symbol) });
+const removeSymbol = (symbol: string) => {
+    onChange({ ...value, symbols: value.symbols.filter(s => s !== symbol) });
+  };
+
+  // Helper functions for date conversion
+  const timestampToDatetimeLocal = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const datetimeLocalToTimestamp = (datetimeLocal: string): number => {
+    return new Date(datetimeLocal).getTime();
   };
 
   return (
@@ -101,137 +113,145 @@ if (!res.ok) throw new Error('Backfill failed');
       <CardHeader>
         <CardTitle>Data Configuration</CardTitle>
         <CardDescription>Select exchange, symbols, and timeframe for backtesting</CardDescription>
-    </CardHeader>
+      </CardHeader>
       <CardContent className="space-y-4">
-        {/* Exchange */}
-        <div className="space-y-2">
-          <Label>Exchange</Label>
-      <Select value={value.exchange} onValueChange={(v) => onChange({ ...value, exchange: v, symbols: [] })}>
-    <SelectTrigger>
-   <SelectValue placeholder="Select exchange" />
-    </SelectTrigger>
-            <SelectContent>
-              {exchangesData?.exchanges?.map((ex: string) => (
-        <SelectItem key={ex} value={ex}>{ex}</SelectItem>
-       ))}
-            </SelectContent>
-          </Select>
+     <div className="space-y-2">
+      <Label>Exchange</Label>
+          <Select value={value.exchange} onValueChange={(v) => onChange({ ...value, exchange: v, symbols: [] })}>
+      <SelectTrigger>
+           <SelectValue placeholder="Select exchange" />
+            </SelectTrigger>
+    <SelectContent>
+          {exchangesData?.exchanges?.map((ex: string) => (
+      <SelectItem key={ex} value={ex}>{ex}</SelectItem>
+  ))}
+    </SelectContent>
+   </Select>
         </div>
 
-        {/* Symbols */}
         <div className="space-y-2">
           <Label>Symbols ({value.symbols.length} selected)</Label>
      <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-              <Button
-       variant="outline"
-     role="combobox"
-   aria-expanded={open}
-        className="w-full justify-between"
-      disabled={!value.exchange}
+            <PopoverTrigger asChild>
+       <Button
+                variant="outline"
+ role="combobox"
+        aria-expanded={open}
+ className="w-full justify-between"
+disabled={!value.exchange}
    >
-    {value.symbols.length === 0 ? 'Select symbols...' : `${value.symbols.length} selected`}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-         </Button>
- </PopoverTrigger>
- <PopoverContent className="w-[400px] p-0">
-     <Command>
-    <CommandInput
-            placeholder="Search symbols..."
-      value={searchQuery}
-         onValueChange={setSearchQuery}
-      />
-          <CommandEmpty>
-         {symbolsLoading ? (
-      <div className="flex items-center justify-center p-4">
-          <Loader2 className="h-4 w-4 animate-spin" />
-  </div>
-            ) : (
-   'No symbols found'
-       )}
+     {value.symbols.length === 0 ? 'Select symbols...' : `${value.symbols.length} selected`}
+       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent className="w-[400px] p-0">
+   <Command>
+         <CommandInput
+             placeholder="Search symbols..."
+            value={searchQuery}
+    onValueChange={setSearchQuery}
+          />
+           <CommandEmpty>
+  {symbolsLoading ? (
+           <div className="flex items-center justify-center p-4">
+    <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+      ) : (
+            'No symbols found'
+     )}
   </CommandEmpty>
-          <CommandGroup className="max-h-[300px] overflow-auto">
- {filteredSymbols.slice(0, 50).map((symbol: string) => (
-     <CommandItem
-      key={symbol}
-onSelect={() => toggleSymbol(symbol)}
+                <CommandGroup className="max-h-[300px] overflow-auto">
+          {filteredSymbols.slice(0, 50).map((symbol: string) => (
+      <CommandItem
+            key={symbol}
+               onSelect={() => toggleSymbol(symbol)}
          >
       <Check
-               className={cn(
-        'mr-2 h-4 w-4',
-              value.symbols.includes(symbol) ? 'opacity-100' : 'opacity-0'
-        )}
-            />
-        {symbol}
-         </CommandItem>
-         ))}
-        </CommandGroup>
-      </Command>
+     className={cn(
+       'mr-2 h-4 w-4',
+       value.symbols.includes(symbol) ? 'opacity-100' : 'opacity-0'
+            )}
+  />
+             {symbol}
+          </CommandItem>
+       ))}
+     </CommandGroup>
+ </Command>
             </PopoverContent>
- </Popover>
+          </Popover>
 
- {/* Selected symbols badges */}
-          {value.symbols.length > 0 && (
-    <div className="flex flex-wrap gap-2 mt-2">
-            {value.symbols.map(symbol => (
-        <Badge key={symbol} variant="secondary" className="gap-1">
-        {symbol}
-               <X
-    className="h-3 w-3 cursor-pointer"
-                    onClick={() => removeSymbol(symbol)}
-      />
-   </Badge>
+      {value.symbols.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {value.symbols.map(symbol => (
+     <Badge key={symbol} variant="secondary" className="gap-1">
+     {symbol}
+      <X
+          className="h-3 w-3 cursor-pointer"
+   onClick={() => removeSymbol(symbol)}
+           />
+     </Badge>
    ))}
-      </div>
+       </div>
           )}
-    </div>
+      </div>
 
-        {/* Timeframe */}
-        <div className="space-y-2">
-     <Label>Base Timeframe</Label>
+     <div className="space-y-2">
+    <Label>Base Timeframe</Label>
           <Select value={value.timeframe} onValueChange={(v) => onChange({ ...value, timeframe: v })}>
-       <SelectTrigger>
-           <SelectValue />
-     </SelectTrigger>
-    <SelectContent>
-    <SelectItem value="1m">1 minute</SelectItem>
-         <SelectItem value="5m">5 minutes</SelectItem>
-       <SelectItem value="15m">15 minutes</SelectItem>
-          <SelectItem value="1h">1 hour</SelectItem>
-            <SelectItem value="4h">4 hours</SelectItem>
-  <SelectItem value="1d">1 day</SelectItem>
-   </SelectContent>
-        </Select>
+          <SelectTrigger>
+       <SelectValue />
+       </SelectTrigger>
+ <SelectContent>
+        <SelectItem value="1m">1 minute</SelectItem>
+  <SelectItem value="5m">5 minutes</SelectItem>
+            <SelectItem value="15m">15 minutes</SelectItem>
+  <SelectItem value="1h">1 hour</SelectItem>
+   <SelectItem value="4h">4 hours</SelectItem>
+        <SelectItem value="1d">1 day</SelectItem>
+       </SelectContent>
+          </Select>
         </div>
 
-        {/* Date Range */}
         <div className="grid grid-cols-2 gap-4">
-       <div className="space-y-2">
-   <Label>Since (timestamp ms)</Label>
+          <div className="space-y-2">
+       <Label className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+     Start Date & Time
+            </Label>
             <Input
-  type="number"
-       value={value.since}
-     onChange={(e) => onChange({ ...value, since: parseInt(e.target.value) })}
-            />
+  type="datetime-local"
+     value={timestampToDatetimeLocal(value.since)}
+    onChange={(e) => onChange({ ...value, since: datetimeLocalToTimestamp(e.target.value) })}
+className="w-full"
+     />
+      <p className="text-xs text-muted-foreground">
+   Timestamp: {value.since}
+   </p>
           </div>
           <div className="space-y-2">
-     <Label>Until (timestamp ms)</Label>
-   <Input
-         type="number"
-     value={value.until}
-   onChange={(e) => onChange({ ...value, until: parseInt(e.target.value) })}
+    <Label className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+        End Date & Time
+ </Label>
+            <Input
+      type="datetime-local"
+    value={timestampToDatetimeLocal(value.until)}
+         onChange={(e) => onChange({ ...value, until: datetimeLocalToTimestamp(e.target.value) })}
+     className="w-full"
             />
+  <p className="text-xs text-muted-foreground">
+         Timestamp: {value.until}
+  </p>
           </div>
-    </div>
+        </div>
 
-        {/* Backfill Button */}
         <Button
           onClick={() => backfillMutation.mutate()}
           disabled={!value.exchange || value.symbols.length === 0 || backfillMutation.isPending}
-  className="w-full"
+          className="w-full"
         >
-    {backfillMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Backfill Data
+          {backfillMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  Backfill Data
         </Button>
       </CardContent>
     </Card>
