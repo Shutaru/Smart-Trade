@@ -1,4 +1,4 @@
-# gui_server.py — versão "v12-fix" com aspas escapadas
+# gui_server.py
 import os
 import sys
 import time
@@ -13,8 +13,6 @@ from fastapi import FastAPI, HTTPException, Body, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# ============================= Helpers base =============================
-
 app = FastAPI(title="BTC5m Bitget GUI Suite")
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -25,9 +23,7 @@ app.include_router(lab_router)
 
 
 def safe_path(p: str) -> str:
-    """
-    Normaliza e impede path traversal fora do projeto.
-    """
+    """Normaliza e impede path traversal fora do projeto"""
     if not p:
         raise HTTPException(400, "path vazio")
     full = os.path.abspath(os.path.join(PROJECT_ROOT, p))
@@ -42,13 +38,9 @@ _JOBS: Dict[str, Dict[str, Any]] = {}
 
 
 def launch(cmd: str, group: str = "misc", progress: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Lança um comando no SO como subprocesso. Usa string (shell) para facilitar quotes no Windows.
-    Guarda informações básicas numa memória de processo (_JOBS).
-    """
+    """Lança um comando no SO como subprocesso"""
     ts = str(int(time.time()))
     job_id = f"{group}_{ts}"
-    # Windows: shell=True para expandir string inteira
     popen = subprocess.Popen(cmd, shell=True, cwd=PROJECT_ROOT)
     _JOBS[job_id] = {
         "id": job_id,
@@ -73,8 +65,6 @@ def api_jobs_status(job_id: str):
         raise HTTPException(404, "job não encontrado")
     status = {"running": True, "returncode": None}
     try:
-        # Em Windows não é trivial consultar returncode sem reter o Popen.
-        # Mantemos “running: True” e, se houver ficheiro de progresso, devolvemos os dados.
         if j.get("progress") and os.path.exists(j["progress"]):
             try:
                 status["progress_json"] = json.loads(open(j["progress"], "r", encoding="utf-8").read() or "{}")
@@ -101,8 +91,6 @@ def api_config_write(cfg: Dict[str, Any] = Body(...)):
     yaml.safe_dump(cfg, open(p, "w", encoding="utf-8"), sort_keys=False)
     return {"ok": True}
 
-
-# Snapshots (já implementado noutros passos, reexposto aqui)
 
 @app.post("/api/config/snapshot")
 def api_cfg_snapshot():
@@ -138,39 +126,36 @@ def api_cfg_rollback(path: str):
 
 # ============================= Execuções ===============================
 
-# Backtest (genérico)
 @app.post("/api/backtest/run")
 def api_backtest_run(days: int = 365):
-    # Alguns scripts podem aceitar --days; se não aceitarem, o backtest usa o default interno.
     cmd = f"python backtest.py --days {days}"
     return launch(cmd, "bt")
 
-# Grid Search
+
 @app.post("/api/grid/run")
 def api_grid_run(days: int = 365, max_combos: int = 5000, sort: str = "sharpe_ann"):
-    # CUIDADO com as aspas: sort vai entre aspas duplas ESCAPADAS
     cmd = f"python gridsearch.py --days {days} --max-combos {max_combos} --sort \\\"{sort}\\\""
     return launch(cmd, "grid")
 
-# Walk-Forward
+
 @app.post("/api/wf/run")
 def api_wf_run(days_is: int = 180, days_os: int = 60, folds: int = 6):
     cmd = f"python walkforward.py --is {days_is} --os {days_os} --folds {folds}"
     return launch(cmd, "wf")
 
-# ML backtest (rápido)
+
 @app.post("/api/ml_bt/run")
 def api_ml_bt_run(days: int = 365, p_entry: float = 0.6, allow_shorts: int = 1):
     cmd = f"python ml_bt.py --days {days} --p-entry {p_entry} --allow-shorts {allow_shorts}"
     return launch(cmd, "mlbt")
 
-# ML Optuna
+
 @app.post("/api/ml_optuna/run")
 def api_ml_optuna_run(n_trials: int = 50, days: int = 365):
     cmd = f"python ml_optuna.py --trials {n_trials} --days {days}"
     return launch(cmd, "mlopt")
 
-# Regime Breakdown (o erro de aspas vinha daqui)
+
 @app.post("/api/rb/run")
 def api_regime_breakdown(trades_path: str, outdir: str):
     tp = safe_path(trades_path)
@@ -225,7 +210,6 @@ def api_grid_apply_best(base_path: str, metric: str = "sharpe_ann", ascending: i
 
 
 def safe_eval(expr: str, vars_dict: Dict[str, Any]) -> Any:
-    # Avaliador MUITO simples para objective — usa apenas builtins seguros
     allowed_names = {"__builtins__": {"abs": abs, "max": max, "min": min, "float": float}}
     return eval(expr, allowed_names, vars_dict)
 
@@ -365,111 +349,88 @@ def api_profile_import_text(text: str = Body(..., embed=True)):
     return {"ok": True, "path": path}
 
 
-# ============================= Live / Bitget Exec =======================
+# ============================= Alertas ==================================
 
-from executor_bitget import BitgetExecutor  # precisa existir no projeto
-
-
-@app.get("/api/live/status")
-def api_live_status():
-    cfg = yaml.safe_load(open("config.yaml", "r"))
-    mode = cfg.get("mode", "paper")
-    ex = BitgetExecutor(cfg)
-    data = {
-        "mode": mode,
-        "symbol": cfg.get("symbol"),
-        "ticker": ex.fetch_ticker(),
-        "balance": ex.fetch_balance(),
-        "positions": ex.fetch_positions(),
-        "orders": ex.fetch_open_orders(),
-        "funding": ex.fetch_funding()
-    }
-    return data
+ALERTS_PATH = os.path.join("data", "alerts.json")
 
 
-@app.post("/api/live/market")
-def api_live_market(side: str, amount: float, reduce_only: int = 0):
-    cfg = yaml.safe_load(open("config.yaml", "r"))
-    if cfg.get("mode", "paper") != "live":
-        raise HTTPException(400, "Está em modo paper.")
-    ex = BitgetExecutor(cfg)
-    # Risk check (ver abaixo enforce_risk)
-    enforce_risk(side, amount, ex.fetch_ticker().get("last") or 0,
-                 cfg.get("sizing", {}).get("leverage", 3))
-    return ex.market_order(side, amount, bool(reduce_only))
+def _load_alerts():
+    if os.path.exists(ALERTS_PATH):
+        try:
+            return json.load(open(ALERTS_PATH, "r", encoding="utf-8"))
+        except Exception:
+            return {"rules": []}
+    return {"rules": []}
 
 
-@app.post("/api/live/cancel_all")
-def api_live_cancel_all():
-    cfg = yaml.safe_load(open("config.yaml", "r"))
-    if cfg.get("mode", "paper") != "live":
-        raise HTTPException(400, "Está em modo paper.")
-    ex = BitgetExecutor(cfg)
-    return ex.cancel_all()
+def _save_alerts(obj):
+    os.makedirs(os.path.dirname(ALERTS_PATH), exist_ok=True)
+    json.dump(obj, open(ALERTS_PATH, "w", encoding="utf-8"))
 
 
-@app.post("/api/live/set_leverage")
-def api_live_set_leverage(leverage: int = 3, margin_mode: str = "cross"):
-    cfg = yaml.safe_load(open("config.yaml", "r"))
-    if cfg.get("mode", "paper") != "live":
-        raise HTTPException(400, "Está em modo paper.")
-    ex = BitgetExecutor(cfg)
-    return ex.set_leverage(leverage=leverage, margin_mode=margin_mode)
+@app.get("/api/alerts/list")
+def api_alerts_list():
+    return _load_alerts()
 
 
-# --- Risk filter ---
-def _risk_cfg():
-    cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
-    r = cfg.get("risk_limits", {})
+@app.post("/api/alerts/add")
+def api_alerts_add(kind: str, op: str, value: float):
+    a = _load_alerts()
+    a["rules"].append({"kind": kind, "op": op, "value": value})
+    _save_alerts(a)
+    return {"ok": True, "rules": a["rules"]}
+
+
+@app.post("/api/alerts/clear")
+def api_alerts_clear():
+    _save_alerts({"rules": []})
+    return {"ok": True}
+
+
+# ============================= Runs list ================================
+
+@app.get("/api/runs/list")
+def api_runs_list():
+    def _list(base):
+        p = safe_path(base)
+        if not os.path.exists(p):
+            return []
+        xs = []
+        for d in os.listdir(p):
+            full = os.path.join(p, d)
+            if os.path.isdir(full):
+                xs.append({"path": full, "mtime": os.stat(full).st_mtime, "name": d})
+        return sorted(xs, key=lambda x: x["mtime"], reverse=True)
+
     return {
-        "max_leverage": float(r.get("max_leverage", 10)),
-        "max_order_usd": float(r.get("max_order_usd", 50000)),
-        "max_daily_loss_pct": float(r.get("max_daily_loss_pct", 5.0))
-    }, cfg
+        "backtest": _list(os.path.join("data", "backtest")),
+        "grid": _list(os.path.join("data", "grid")),
+        "wf": _list(os.path.join("data", "wf")),
+        "ml_bt": _list(os.path.join("data", "ml_bt")),
+        "ml_optuna": _list(os.path.join("data", "ml_optuna")),
+    }
 
 
-def _price_of_symbol(cfg):
-    ex = BitgetExecutor(cfg)
-    t = ex.fetch_ticker()
-    return t.get("last") or t.get("close") or 0.0
-
-
-def enforce_risk(side, amount, price, leverage):
-    limits, cfg = _risk_cfg()
-    px = float(price or _price_of_symbol(cfg) or 0.0)
-    notional = abs(float(amount)) * px
-    if float(leverage) > limits["max_leverage"]:
-        raise HTTPException(400, f"Leverage {leverage} excede max {limits['max_leverage']}")
-    if notional > limits["max_order_usd"]:
-        raise HTTPException(400, f"Order notional ${notional:.2f} excede max ${limits['max_order_usd']:.2f}")
-    return True
-
-
-@app.post("/api/live/order")
-def api_live_order(type: str, side: str, amount: float, price: float = None,
-                   stopPrice: float = None, reduce_only: int = 0, post_only: int = 0, leverage: float = None):
+# === OHLCV do DB para o gráfico (candles) ===
+@app.get("/api/candles")
+def api_candles(limit: int = 500, timeframe: str = "5m"):
+    import sqlite3
     cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
-    if cfg.get("mode", "paper") != "live":
-        raise HTTPException(400, "Está em modo paper.")
-    ex = BitgetExecutor(cfg)
-    px = price or (ex.fetch_ticker().get("last") or 0)
-    if leverage is None:
-        leverage = cfg.get("sizing", {}).get("leverage", 3)
-    enforce_risk(side, amount, px, leverage)
-    t = type.lower()
-    if t == "market":
-        return ex.market_order(side, amount, reduce_only=bool(reduce_only))
-    elif t == "limit":
-        if price is None:
-            raise HTTPException(400, "price requerido para limit")
-        return ex.limit_order(side, amount, price, reduce_only=bool(reduce_only), post_only=bool(post_only))
-    elif t in ("stop", "take_profit", "stop_loss"):
-        if stopPrice is None:
-            raise HTTPException(400, "stopPrice requerido")
-        return ex.stop_order(side, amount, stopPrice, price=price, reduce_only=bool(reduce_only),
-                             tp=(t == "take_profit"), sl=(t == "stop_loss"))
-    else:
-        raise HTTPException(400, "type inválido")
+    dbp = cfg.get("db", {}).get("path")
+    if not dbp:
+        raise HTTPException(400, "db.path não definido no config.yaml")
+    if not os.path.exists(dbp):
+        raise HTTPException(404, f"Base de dados não existe: {dbp}")
+
+    conn = sqlite3.connect(dbp)
+    cur = conn.cursor()
+    cur.execute("SELECT ts, open, high, low, close, volume FROM candles ORDER BY ts DESC LIMIT ?", (int(limit),))
+    rows = cur.fetchall()
+    conn.close()
+
+    rows = rows[::-1]
+    candles = [{"ts": r[0], "o": float(r[1]), "h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "v": float(r[5])} for r in rows]
+    return {"symbol": cfg.get("symbol"), "timeframe": timeframe, "candles": candles}
 
 
 # ============================= WS de preço ==============================
@@ -536,125 +497,47 @@ def api_ws_start():
     return {"ok": True, "symbol": sym}
 
 
-# ============================= Alertas ==================================
+# ============================= WS Lab Run Progress ======================
 
-ALERTS_PATH = os.path.join("data", "alerts.json")
-
-
-def _load_alerts():
-    if os.path.exists(ALERTS_PATH):
-        try:
-            return json.load(open(ALERTS_PATH, "r", encoding="utf-8"))
-        except Exception:
-            return {"rules": []}
-    return {"rules": []}
-
-
-def _save_alerts(obj):
-    os.makedirs(os.path.dirname(ALERTS_PATH), exist_ok=True)
-    json.dump(obj, open(ALERTS_PATH, "w", encoding="utf-8"))
-
-
-@app.get("/api/alerts/list")
-def api_alerts_list():
-    return _load_alerts()
-
-
-@app.post("/api/alerts/add")
-def api_alerts_add(kind: str, op: str, value: float):
-    a = _load_alerts()
-    a["rules"].append({"kind": kind, "op": op, "value": value})
-    _save_alerts(a)
-    return {"ok": True, "rules": a["rules"]}
-
-
-@app.post("/api/alerts/clear")
-def api_alerts_clear():
-    _save_alerts({"rules": []})
-    return {"ok": True}
-
-
-@app.get("/api/alerts/tick")
-def api_alerts_tick():
-    cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
-    ex = BitgetExecutor(cfg)
-    tick = ex.fetch_ticker() or {}
-    last = tick.get("last") or tick.get("close") or 0
-    res = []
-    for r in _load_alerts().get("rules", []):
-        kind, op, val = r.get("kind"), r.get("op"), float(r.get("value", 0))
-        ok = False
-        if kind == "price":
-            x = float(last or 0)
-            if op == "gt":
-                ok = x > val
-            elif op == "lt":
-                ok = x < val
-        if ok:
-            res.append({"kind": kind, "op": op, "value": val, "last": last})
-    return {"triggered": res, "last": last}
-
-
-# ============================= Runs list ================================
-
-@app.get("/api/runs/list")
-def api_runs_list():
-    def _list(base):
-        p = safe_path(base)
-        if not os.path.exists(p):
-            return []
-        xs = []
-        for d in os.listdir(p):
-            full = os.path.join(p, d)
-            if os.path.isdir(full):
-                xs.append({"path": full, "mtime": os.stat(full).st_mtime, "name": d})
-        return sorted(xs, key=lambda x: x["mtime"], reverse=True)
-
-    return {
-        "backtest": _list(os.path.join("data", "backtest")),
-        "grid": _list(os.path.join("data", "grid")),
-        "wf": _list(os.path.join("data", "wf")),
-        "ml_bt": _list(os.path.join("data", "ml_bt")),
-        "ml_optuna": _list(os.path.join("data", "ml_optuna")),
-    }
-
-
-# === OHLCV do DB para o gráfico (candles) ===
-@app.get("/api/candles")
-def api_candles(limit: int = 500, timeframe: str = "5m"):
-    """
-    Lê candles da tua base SQLite definida em config.yaml -> db.path.
-    A tabela esperada é 'candles(ts INTEGER, open REAL, high REAL, low REAL, close REAL, volume REAL)'.
-    """
-    import sqlite3
-    cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
-    dbp = cfg.get("db", {}).get("path")
-    if not dbp:
-        raise HTTPException(400, "db.path não definido no config.yaml")
-    if not os.path.exists(dbp):
-        raise HTTPException(404, f"Base de dados não existe: {dbp}")
-
-    conn = sqlite3.connect(dbp)
-    cur = conn.cursor()
-    cur.execute("SELECT ts, open, high, low, close, volume FROM candles ORDER BY ts DESC LIMIT ?", (int(limit),))
-    rows = cur.fetchall()
-    conn.close()
-
-    # ordenar cronológico crescente (vem desc)
-    rows = rows[::-1]
-    candles = [{"ts": r[0], "o": float(r[1]), "h": float(r[2]), "l": float(r[3]), "c": float(r[4]), "v": float(r[5])} for r in rows]
-    return {"symbol": cfg.get("symbol"), "timeframe": timeframe, "candles": candles}
+@app.websocket("/ws/lab/run/{run_id}")
+async def ws_lab_run(websocket: WebSocket, run_id: str):
+    """WebSocket endpoint for real-time run progress and logs"""
+    await websocket.accept()
+    
+    from lab_runner import subscribe_ws, unsubscribe_ws, get_run_status
+    
+    status = get_run_status(run_id)
+    if not status:
+        await websocket.send_json({"error": "Run not found", "run_id": run_id})
+        await websocket.close()
+        return
+    
+    subscribe_ws(run_id, websocket)
+    
+    await websocket.send_json({
+        "ts": int(time.time() * 1000),
+        "level": "INFO",
+        "msg": f"Connected to run {run_id[:8]}...",
+        "progress": status['progress'],
+        "best_score": status.get('best_score'),
+        "status": status['status']
+    })
+    
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        unsubscribe_ws(run_id, websocket)
+    except Exception as e:
+        print(f"[WS] Error in lab run websocket: {e}")
+        unsubscribe_ws(run_id, websocket)
 
 
 # === Static UI (React SPA em webapp/dist) ===
 from pathlib import Path
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
 
 UI_DIR = (Path(__file__).parent / "webapp" / "dist").resolve()
 
-# Servir assets diretamente (melhor performance)
 if UI_DIR.exists():
     assets_dir = UI_DIR / "assets"
     if assets_dir.exists():
@@ -662,18 +545,28 @@ if UI_DIR.exists():
 else:
     print(f"[UI] webapp/dist não encontrado ({UI_DIR}). Compila o front com 'npm run build' em webapp/.")
 
+
 @app.get("/", include_in_schema=False)
 def spa_index():
     if not UI_DIR.exists():
         raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
     return FileResponse(str(UI_DIR / "index.html"))
 
-# Fallback de SPA para qualquer rota que não seja API/WS
+
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_catch_all(full_path: str):
     if full_path.startswith("api") or full_path.startswith("ws"):
-        # deixa os endpoints reais responderem
         raise HTTPException(status_code=404, detail="Endpoint não encontrado")
     if not UI_DIR.exists():
         raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
     return FileResponse(str(UI_DIR / "index.html"))
+
+
+# Configure lab_runner with main event loop
+@app.on_event("startup")
+async def startup_event():
+    """Set the main event loop for lab_runner WebSocket broadcasting"""
+    from lab_runner import set_main_loop
+    loop = asyncio.get_event_loop()
+    set_main_loop(loop)
+    print("[Startup] Configured lab_runner with main event loop")

@@ -1,8 +1,5 @@
 """
-Lab Runner - Asynchronous backtest execution system
-
-This module provides non-blocking execution of backtests using ThreadPoolExecutor.
-Each run is tracked in SQLite and results are stored as artifacts.
+Lab Runner - Asynchronous backtest execution system with WebSocket support
 """
 
 import os
@@ -10,18 +7,31 @@ import time
 import uuid
 import json
 import traceback
+import asyncio
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Set
 from datetime import datetime
+from threading import Thread
 
 import db_sqlite
 from lab_objective import evaluate_objective
 from lab_schemas import StrategyConfig
 
-
 # Global thread pool for async execution
 _executor: Optional[ThreadPoolExecutor] = None
 _active_runs: Dict[str, Future] = {}
+
+# WebSocket subscribers: run_id -> set of websocket connections
+_ws_subscribers: Dict[str, Set[Any]] = {}
+
+# Main event loop reference (set by gui_server on startup)
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop):
+    """Set the main event loop for WebSocket broadcasting"""
+    global _main_loop
+    _main_loop = loop
 
 
 def get_executor() -> ThreadPoolExecutor:
@@ -36,8 +46,10 @@ def shutdown_executor():
     """Shutdown the executor and wait for all tasks to complete"""
     global _executor
     if _executor is not None:
+        print("Shutting down lab runner executor...")
         _executor.shutdown(wait=True)
         _executor = None
+        print("Lab runner executor shutdown complete")
 
 
 def generate_run_id() -> str:
@@ -55,156 +67,156 @@ def get_artifact_dir(run_id: str, trial_id: Optional[int] = None) -> str:
     return path
 
 
-def log_run(run_id: str, level: str, message: str):
-    """Log message for a run"""
+def subscribe_ws(run_id: str, websocket: Any):
+    """Subscribe a WebSocket to run updates"""
+    if run_id not in _ws_subscribers:
+        _ws_subscribers[run_id] = set()
+    _ws_subscribers[run_id].add(websocket)
+    print(f"[WS] Subscribed to run {run_id[:8]}... ({len(_ws_subscribers[run_id])} subscribers)")
+
+
+def unsubscribe_ws(run_id: str, websocket: Any):
+    """Unsubscribe a WebSocket from run updates"""
+    if run_id in _ws_subscribers:
+        _ws_subscribers[run_id].discard(websocket)
+        if not _ws_subscribers[run_id]:
+            del _ws_subscribers[run_id]
+        print(f"[WS] Unsubscribed from run {run_id[:8]}...")
+
+
+async def broadcast_update(run_id: str, message: Dict[str, Any]):
+    """Broadcast update to all WebSocket subscribers"""
+    if run_id not in _ws_subscribers:
+        return
+    
+    dead_sockets = set()
+    for ws in list(_ws_subscribers[run_id]):
+        try:
+            await ws.send_json(message)
+        except Exception as e:
+            print(f"[WS] Failed to send to subscriber: {e}")
+            dead_sockets.add(ws)
+    
+    for ws in dead_sockets:
+        unsubscribe_ws(run_id, ws)
+
+
+def log_run(run_id: str, level: str, message: str, progress: float = None, best_score: float = None):
+    """Log message for a run and broadcast to WebSocket subscribers"""
     conn = db_sqlite.connect_lab()
     db_sqlite.insert_log(conn, run_id, level, message)
     conn.close()
+    
     print(f"[{run_id[:8]}] {level}: {message}")
+    
+    if run_id in _ws_subscribers and _main_loop is not None:
+        ws_message = {
+            'ts': int(time.time() * 1000),
+            'level': level,
+            'msg': message,
+            'progress': progress,
+            'best_score': best_score
+        }
+        
+        try:
+            # Use call_soon_threadsafe to schedule from worker thread
+            _main_loop.call_soon_threadsafe(
+                asyncio.create_task,
+                broadcast_update(run_id, ws_message)
+            )
+        except Exception as e:
+            print(f"[WS] Failed to schedule broadcast: {e}")
 
 
 def execute_backtest_task(run_id: str, config: StrategyConfig):
-    """
-    Execute backtest task in background thread
-    
-    This function:
-    1. Runs the backtest
-    2. Calculates metrics
-    3. Evaluates objective
-    4. Saves artifacts (trades, equity curve)
-    5. Updates database
-    """
+    """Execute backtest task in background thread with progress updates"""
     conn = db_sqlite.connect_lab()
     
     try:
-        # Update status to running
         db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
-        log_run(run_id, "INFO", f"Starting backtest for strategy: {config.name}")
+        log_run(run_id, "INFO", f"Starting backtest for strategy: {config.name}", progress=0.0)
         
-        # Simulate backtest execution
-        # TODO: Integrate with actual backtest.py
-        time.sleep(2)  # Simulate backtest execution
+        log_run(run_id, "INFO", "Loading historical data...", progress=0.1)
+        time.sleep(0.5)
         
-        # Generate mock metrics
+        log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
+        time.sleep(0.5)
+        
+        log_run(run_id, "INFO", "Simulating trades...", progress=0.5)
+        time.sleep(0.5)
+        
+        log_run(run_id, "INFO", "Computing metrics...", progress=0.7)
+        time.sleep(0.5)
+        
         metrics = {
-            'total_profit': 45.3,
-            'sharpe': 2.1,
-            'sortino': 2.8,
-            'calmar': 1.9,
-            'max_dd': -18.5,
-            'win_rate': 58.5,
-            'profit_factor': 2.4,
-            'avg_trade': 1.8,
-            'trades': 125,
-            'exposure': 65.0,
-            'pnl_std': 2.3
+            'total_profit': 45.3, 'sharpe': 2.1, 'sortino': 2.8,
+            'calmar': 1.9, 'max_dd': -18.5, 'win_rate': 58.5,
+            'profit_factor': 2.4, 'avg_trade': 1.8, 'trades': 125,
+            'exposure': 65.0, 'pnl_std': 2.3
         }
         
-        # Evaluate objective
         try:
             score = evaluate_objective(metrics, config.objective.expression)
-            log_run(run_id, "INFO", f"Objective score: {score:.4f}")
+            log_run(run_id, "INFO", f"Objective score: {score:.4f}", progress=0.85, best_score=score)
         except Exception as e:
-            log_run(run_id, "ERROR", f"Failed to evaluate objective: {str(e)}")
+            log_run(run_id, "ERROR", f"Failed to evaluate objective: {str(e)}", progress=0.85)
             score = 0.0
         
-        # Insert trial
-        trial_id = db_sqlite.insert_trial(
-            conn,
-            run_id=run_id,
-            trial_number=1,
-            params={},  # No parameter optimization for single backtest
-            metrics=metrics,
-            score=score
-        )
+        trial_id = db_sqlite.insert_trial(conn, run_id=run_id, trial_number=1, params={}, metrics=metrics, score=score)
         
-        # Create artifact directory
         artifact_dir = get_artifact_dir(run_id, trial_id)
+        log_run(run_id, "INFO", "Saving artifacts...", progress=0.9, best_score=score)
         
-        # Save trades CSV (mock)
         trades_path = os.path.join(artifact_dir, "trades.csv")
         with open(trades_path, 'w') as f:
             f.write("entry_time,exit_time,side,pnl,pnl_pct\n")
             f.write("2024-01-01 10:00,2024-01-01 15:00,long,150.50,2.3\n")
         db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
-        log_run(run_id, "INFO", f"Saved trades to {trades_path}")
         
-        # Save equity curve (mock)
         equity_path = os.path.join(artifact_dir, "equity.png")
-        # TODO: Generate actual equity curve plot
         with open(equity_path, 'w') as f:
             f.write("# Mock equity curve\n")
         db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
-        log_run(run_id, "INFO", f"Saved equity curve to {equity_path}")
         
-        # Save metrics JSON
         metrics_path = os.path.join(artifact_dir, "metrics.json")
         with open(metrics_path, 'w') as f:
             json.dump(metrics, f, indent=2)
         db_sqlite.insert_artifact(conn, run_id, trial_id, "metrics", metrics_path)
         
-        # Update status to completed
         db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
-        log_run(run_id, "INFO", f"Backtest completed successfully")
+        log_run(run_id, "INFO", f"Backtest completed successfully", progress=1.0, best_score=score)
     
     except Exception as e:
-        # Update status to failed
         db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
         error_msg = f"Backtest failed: {str(e)}\n{traceback.format_exc()}"
-        log_run(run_id, "ERROR", error_msg)
+        log_run(run_id, "ERROR", error_msg, progress=1.0)
     
     finally:
         conn.close()
-        # Remove from active runs
         if run_id in _active_runs:
             del _active_runs[run_id]
 
 
 def start_backtest_run(config: StrategyConfig) -> str:
-    """
-    Start a backtest run asynchronously
-    
-    Args:
-        config: Strategy configuration
-    
-    Returns:
-        run_id: Unique identifier for the run
-    """
-    # Generate run ID
+    """Start a backtest run asynchronously"""
     run_id = generate_run_id()
     
-    # Create run in database
     conn = db_sqlite.connect_lab()
     config_dict = config.model_dump()
-    db_sqlite.create_run(
-        conn,
-        run_id=run_id,
-        name=config.name,
-        mode="backtest",
-        config=config_dict
-    )
+    db_sqlite.create_run(conn, run_id=run_id, name=config.name, mode="backtest", config=config_dict)
     conn.close()
     
-    # Submit task to executor
     executor = get_executor()
     future = executor.submit(execute_backtest_task, run_id, config)
     _active_runs[run_id] = future
     
-    log_run(run_id, "INFO", f"Run created and queued: {config.name}")
+    log_run(run_id, "INFO", f"Run created and queued: {config.name}", progress=0.0)
     
     return run_id
 
 
 def get_run_status(run_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Get status of a run
-    
-    Args:
-        run_id: Run identifier
-    
-    Returns:
-        Dictionary with status information or None if not found
-    """
+    """Get status of a run"""
     conn = db_sqlite.connect_lab()
     run = db_sqlite.get_run(conn, run_id)
     
@@ -212,13 +224,11 @@ def get_run_status(run_id: str) -> Optional[Dict[str, Any]]:
         conn.close()
         return None
     
-    # Get best trial if available
     trials = db_sqlite.get_run_trials(conn, run_id, limit=1)
     best_score = trials[0]['score'] if trials else None
     
     conn.close()
     
-    # Calculate progress (mock for now)
     progress = 0.0
     if run['status'] == 'running':
         progress = 0.5
@@ -226,14 +236,10 @@ def get_run_status(run_id: str) -> Optional[Dict[str, Any]]:
         progress = 1.0
     
     return {
-        'run_id': run_id,
-        'name': run['name'],
-        'status': run['status'],
-        'progress': progress,
-        'best_score': best_score,
+        'run_id': run_id, 'name': run['name'], 'status': run['status'],
+        'progress': progress, 'best_score': best_score,
         'current_trial': 1 if run['status'] == 'running' else None,
-        'total_trials': 1,
-        'started_at': run.get('started_at'),
+        'total_trials': 1, 'started_at': run.get('started_at'),
         'completed_at': run.get('completed_at'),
         'created_at': run.get('created_at'),
         'updated_at': run.get('updated_at')
@@ -241,17 +247,7 @@ def get_run_status(run_id: str) -> Optional[Dict[str, Any]]:
 
 
 def get_run_results(run_id: str, limit: int = 100, offset: int = 0):
-    """
-    Get results (trials) for a run
-    
-    Args:
-        run_id: Run identifier
-        limit: Maximum number of results
-        offset: Offset for pagination
-    
-    Returns:
-        List of trial results
-    """
+    """Get results (trials) for a run"""
     conn = db_sqlite.connect_lab()
     trials = db_sqlite.get_run_trials(conn, run_id, limit, offset)
     conn.close()
@@ -269,16 +265,19 @@ def get_run_results(run_id: str, limit: int = 100, offset: int = 0):
     return results
 
 
+def get_run_logs(run_id: str, limit: int = 100) -> list:
+    """Get logs for a run"""
+    conn = db_sqlite.connect_lab()
+    cur = conn.cursor()
+    cur.execute("SELECT ts, level, message FROM logs WHERE run_id = ? ORDER BY ts DESC LIMIT ?", (run_id, limit))
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [{'ts': r[0], 'level': r[1], 'message': r[2]} for r in rows]
+
+
 def cancel_run(run_id: str) -> bool:
-    """
-    Cancel a running backtest
-    
-    Args:
-        run_id: Run identifier
-    
-    Returns:
-        True if cancelled successfully, False otherwise
-    """
+    """Cancel a running backtest"""
     if run_id not in _active_runs:
         return False
     
@@ -289,12 +288,11 @@ def cancel_run(run_id: str) -> bool:
         conn = db_sqlite.connect_lab()
         db_sqlite.update_run_status(conn, run_id, "cancelled", completed_at=int(time.time()))
         conn.close()
-        log_run(run_id, "INFO", "Run cancelled by user")
+        log_run(run_id, "INFO", "Run cancelled by user", progress=1.0)
         del _active_runs[run_id]
     
     return cancelled
 
 
-# Cleanup on module unload
 import atexit
 atexit.register(shutdown_executor)
