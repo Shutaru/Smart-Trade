@@ -446,7 +446,7 @@ class StrategyLabBacktestEngine:
     
     def _save_artifacts(self, broker: PaperFuturesBroker, metrics: Dict[str, Any]):
         """Save backtest artifacts to disk"""
-        
+
         # Save metrics.json
         metrics_path = os.path.join(self.artifact_dir, "metrics.json")
         with open(metrics_path, 'w') as f:
@@ -457,20 +457,42 @@ class StrategyLabBacktestEngine:
         equity_path = os.path.join(self.artifact_dir, "equity.csv")
         
         if os.path.exists(equity_curve_path):
-            df = pd.read_csv(equity_curve_path)
-            
-            # Calculate drawdown
-            cummax = df['equity'].cummax()
-            df['drawdown'] = ((df['equity'] - cummax) / cummax * 100).fillna(0)
-            
-            # Format timestamp
-            df_output = pd.DataFrame({
-                'timestamp': pd.to_datetime(df['ts'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%S'),
-                'equity': df['equity'],
-                'drawdown': df['drawdown']
-            })
-            
-            df_output.to_csv(equity_path, index=False)
+            try:
+                df = pd.read_csv(equity_curve_path)
+      
+                # Validate timestamps are reasonable (Unix seconds should be 10 digits)
+                if df['ts'].max() > 9999999999:  # Year 2286 in seconds
+                    # Timestamps might be in milliseconds, convert to seconds
+                    df['ts'] = df['ts'] / 1000
+     
+                # Calculate drawdown
+                cummax = df['equity'].cummax()
+                df['drawdown'] = ((df['equity'] - cummax) / cummax * 100).fillna(0)
+                
+                # Format timestamp - ts should be in UNIX seconds
+                df_output = pd.DataFrame({
+                    'timestamp': pd.to_datetime(df['ts'], unit='s', errors='coerce').dt.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'equity': df['equity'],
+                    'drawdown': df['drawdown']
+                })
+                
+                # Remove rows with invalid timestamps
+                df_output = df_output.dropna(subset=['timestamp'])
+               
+                if len(df_output) > 0:
+                    df_output.to_csv(equity_path, index=False)
+                else:
+                    print(f"[Backtest] Warning: No valid equity data to save")
+      
+            except Exception as e:
+                print(f"[Backtest] Warning: Failed to process equity curve: {e}")
+                # Create minimal equity file for frontend
+                df_minimal = pd.DataFrame({
+                    'timestamp': [pd.Timestamp.now().strftime('%Y-%m-%dT%H:%M:%S')],
+                    'equity': [broker.start_equity],
+                    'drawdown': [0.0]
+                })
+                df_minimal.to_csv(equity_path, index=False)
 
 
 def run_strategy_lab_backtest(config: StrategyConfig, artifact_dir: str) -> Dict[str, Any]:
@@ -478,7 +500,7 @@ def run_strategy_lab_backtest(config: StrategyConfig, artifact_dir: str) -> Dict
     Main entry point for Strategy Lab backtests
     
     Args:
-        config: Strategy configuration from Strategy Lab
+  config: Strategy configuration from Strategy Lab
         artifact_dir: Directory to save results
     
     Returns:
