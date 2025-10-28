@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 import os
+import json
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
@@ -238,6 +239,139 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
         return RunResultsResponse(run_id=run_id, trials=trials, total=len(trials))
     except Exception as e:
         raise HTTPException(500, f"Failed to get results: {str(e)}")
+
+
+@router.get("/run/{run_id}/candles")
+async def get_run_candles(run_id: str):
+    """Get OHLCV candles for the backtest period"""
+    import sqlite3
+    
+    # Get run config to know symbol and timeframe
+    conn_lab = db_sqlite.connect_lab()
+    run = db_sqlite.get_run(conn_lab, run_id)
+    conn_lab.close()
+    
+    if not run:
+        raise HTTPException(404, "Run not found")
+    
+    config = json.loads(run['config_json'])
+    data_spec = config.get('data', {})
+    exchange = data_spec.get('exchange', 'bitget')
+    symbols = data_spec.get('symbols', [])
+    timeframe = data_spec.get('timeframe', '5m')
+    since = data_spec.get('since')
+    until = data_spec.get('until')
+    
+    if not symbols:
+        raise HTTPException(400, "No symbols in config")
+    
+    # Use first symbol for chart
+    symbol = symbols[0]
+    db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
+    
+    if not os.path.exists(db_path):
+        raise HTTPException(404, f"Database not found for {symbol}")
+    
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    
+    table = db_sqlite.get_candles_table(timeframe)
+    
+    if since and until:
+        cur.execute(
+            f"SELECT ts, open, high, low, close, volume FROM {table} WHERE ts >= ? AND ts < ? ORDER BY ts ASC",
+ (since, until)
+        )
+    else:
+        cur.execute(f"SELECT ts, open, high, low, close, volume FROM {table} ORDER BY ts ASC LIMIT 5000")
+    
+    rows = cur.fetchall()
+    conn.close()
+    
+    candles = [
+        {
+    'time': int(r[0] / 1000),  # Lightweight Charts uses seconds
+            'open': float(r[1]),
+            'high': float(r[2]),
+   'low': float(r[3]),
+    'close': float(r[4]),
+        'volume': float(r[5])
+        }
+   for r in rows
+    ]
+    
+    return {'symbol': symbol, 'timeframe': timeframe, 'candles': candles}
+
+
+@router.get("/run/{run_id}/equity")
+async def get_run_equity(run_id: str):
+    """Get equity curve data"""
+    import csv
+    import glob
+    
+    # Find equity.csv in artifacts
+    pattern = os.path.join("artifacts", run_id, "*", "equity.csv")
+    equity_files = glob.glob(pattern)
+    
+    if not equity_files:
+        # If no equity.csv, generate from trades
+      trades_pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
+        trades_files = glob.glob(trades_pattern)
+   
+        if not trades_files:
+    raise HTTPException(404, "No equity or trades data found")
+        
+        # Generate equity from trades
+        trades = []
+ with open(trades_files[0], 'r') as f:
+ reader = csv.DictReader(f)
+for row in reader:
+              trades.append({
+            'exit_time': row['exit_time'],
+     'pnl': float(row['pnl'])
+                })
+        
+        # Sort by exit time and calculate cumulative
+        from datetime import datetime
+  trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
+        
+        equity_data = []
+        cumulative = 0.0
+        max_equity = 0.0
+        
+  for trade in trades:
+            cumulative += trade['pnl']
+            max_equity = max(max_equity, cumulative)
+  drawdown = ((cumulative - max_equity) / max(abs(max_equity), 1)) * 100 if max_equity > 0 else 0
+   
+            timestamp = int(datetime.fromisoformat(trade['exit_time']).timestamp())
+            equity_data.append({
+           'time': timestamp,
+          'equity': cumulative,
+     'drawdown': drawdown
+     })
+   
+        return {'equity': equity_data}
+    
+    # Read equity.csv
+    equity_path = equity_files[0]
+    equity_data = []
+    
+    try:
+      with open(equity_path, 'r') as f:
+  reader = csv.DictReader(f)
+       for row in reader:
+ from datetime import datetime
+   timestamp = int(datetime.fromisoformat(row['timestamp']).timestamp())
+          equity_data.append({
+         'time': timestamp,
+                    'equity': float(row['equity']),
+             'drawdown': float(row.get('drawdown', 0))
+})
+    except Exception as e:
+        raise HTTPException(500, f"Error reading equity: {str(e)}")
+
+    return {'equity': equity_data}
 
 
 @router.get("/run/{run_id}/artifacts/trades")

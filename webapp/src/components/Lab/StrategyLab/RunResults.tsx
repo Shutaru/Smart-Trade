@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { TradesTable } from './TradesTable';
+import { TradingChart } from './TradingChart';
 
 interface RunStatus {
   run_id: string;
@@ -251,21 +252,11 @@ Run Status
       </div>
       )}
 
-        {/* Equity Curve Placeholder */}
-        <Card>
-              <CardHeader>
-       <CardTitle>Equity Curve</CardTitle>
-          <CardDescription>Cumulative P&L over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-      <div className="h-[300px] flex items-center justify-center bg-muted rounded-lg">
-        <p className="text-muted-foreground">Equity curve visualization coming soon...</p>
-         </div>
-         </CardContent>
-            </Card>
+        {/* Trading Chart - Equity + Candlesticks */}
+        <TradingChart runId={runId!} />
     </TabsContent>
 
- <TabsContent value="trades">
+    <TabsContent value="trades">
           <Card>
           <CardHeader>
               <CardTitle>Trades</CardTitle>
