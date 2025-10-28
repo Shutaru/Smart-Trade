@@ -45,6 +45,7 @@ const defaultStrategy = {
     },
     risk: {
         starting_equity: 10000.0,  // Initial portfolio value in USDT
+        max_risk_pct: 1.0,  // Max risk per trade (1%)
         leverage: 3,
         position_sizing: 'fixed_usd',
         size_value: 1000,
