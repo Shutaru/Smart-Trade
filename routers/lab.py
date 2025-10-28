@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 import os
+import json
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
@@ -127,10 +128,11 @@ async def validate_strategy(config: StrategyConfig):
 
 @router.post("/backfill", response_model=BackfillResponse)
 async def backfill_data(request: BackfillRequest):
-    """Backfill OHLCV data and calculate features - with progress logging"""
+    """Backfill OHLCV data with robust pagination and integrity checks"""
     import ccxt
     import pandas as pd
     import time
+    import math
     from lab_features import calculate_features, features_to_rows
     
     try:
@@ -148,6 +150,9 @@ async def backfill_data(request: BackfillRequest):
                     start_time = time.time()
                     api_calls = 0
                     
+                    # Parse timeframe to milliseconds
+                    tf_ms = ex.parse_timeframe(tf) * 1000
+                    
                     all_candles = []
                     current_since = request.since
                     
@@ -157,15 +162,41 @@ async def backfill_data(request: BackfillRequest):
                         
                         if not candles:
                             break
+                        
+                        # Deduplicate overlapping candles
+                        candles.sort(key=lambda c: c[0])
+                        if all_candles:
+                            last_ts = all_candles[-1][0]
+                            candles = [c for c in candles if c[0] > last_ts]
+                        
+                            if not candles:
+                                # No new candles, advance cursor by 1000 timeframes
+                                current_since += 1000 * tf_ms
+                                continue
+                        
                         all_candles.extend(candles)
-                        current_since = candles[-1][0] + 1
+                        
+                        # Advance cursor: 1 timeframe after last candle
+                        last_ts = candles[-1][0]
+                        current_since = last_ts + tf_ms
+                        
+                        # Break if we got less than limit (end of available data)
                         if len(candles) < 1000:
                             break
                     
+                    # Filter by time range
                     all_candles = [c for c in all_candles if request.since <= c[0] < request.until]
                     
+                    # Calculate integrity stats
+                    unique_ts = {c[0] for c in all_candles}
+                    unique_count = len(unique_ts)
+                    expected_count = math.floor((request.until - request.since) / tf_ms)
+                    missing_count = max(0, expected_count - unique_count)
+                    completeness = round((unique_count / max(1, expected_count)) * 100, 2)
+                    
                     elapsed = time.time() - start_time
-                    print(f"[Backfill] {symbol} @ {tf}: {len(all_candles)} candles in {elapsed:.1f}s ({api_calls} API calls)")
+                    print(f"[Backfill] {symbol} @ {tf}: {unique_count} candles in {elapsed:.1f}s ({api_calls} API calls)")
+                    print(f"[Backfill] Completeness: {completeness}% (expected ~{expected_count}, missing ~{missing_count})")
                     
                     if not all_candles:
                         results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path="N/A"))
@@ -203,12 +234,14 @@ async def backfill_data(request: BackfillRequest):
                     results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path=f"Error: {e}"))
         
         success_count = sum(1 for r in results if r.candles_inserted > 0)
-        message = f"Backfilled {success_count}/{len(results)} combinations"
+        message = f"Backfilled {success_count}/{len(results)} combinations. Total: {total_candles} candles"
         print(f"[Backfill] Complete: {total_candles} candles, {total_features} features")
         
         return BackfillResponse(success=True, message=message, results=results, total_candles=total_candles, total_features=total_features)
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, f"Backfill error: {str(e)}")
 
 
@@ -263,7 +296,8 @@ async def get_run_status_endpoint(run_id: str):
     if not status:
         raise HTTPException(404, f"Run not found: {run_id}")
     
-    return RunStatus(        run_id=status['run_id'],
+    return RunStatus(
+        run_id=status['run_id'],
         status=status['status'],
         progress=status['progress'],
         current_trial=status.get('current_trial'),
@@ -280,14 +314,11 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
     from lab_runner import get_run_results
     
     try:
-        # get_run_results j� retorna dicts parsed
         results = get_run_results(run_id, limit, offset)
         
-        # Criar TrialResult objects diretamente dos results
         trials = []
         for r in results:
             try:
-                # Remove _stats from metrics (nested dict n�o � compat�vel com Pydantic)
                 metrics = r['metrics'].copy()
                 if '_stats' in metrics:
                     del metrics['_stats']
@@ -295,12 +326,11 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
                 trials.append(TrialResult(
                     trial_id=r['trial_id'],
                     params=r['params'],
-                    metrics=metrics,  # Agora sem _stats
+                    metrics=metrics,
                     score=r['score']
                 ))
             except Exception as e:
                 print(f"[get_run_results_endpoint] Error creating TrialResult: {e}")
-                # Skip malformed trial
                 continue
         
         return RunResultsResponse(run_id=run_id, trials=trials, total=len(trials))
@@ -316,7 +346,6 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
 async def get_run_candles(run_id: str):
     """Get OHLCV candles for the backtest period"""
     import sqlite3
-    import json
     
     conn_lab = db_sqlite.connect_lab()
     run = db_sqlite.get_run(conn_lab, run_id)
@@ -328,24 +357,23 @@ async def get_run_candles(run_id: str):
     config = json.loads(run['config_json'])
     data_spec = config.get('data', {})
     exchange = data_spec.get('exchange', 'bitget')
-    symbols = data_spec.get('symbols', ['BTC/USDT:USDT'])  # Default to BTC
+    symbols = data_spec.get('symbols', ['BTC/USDT:USDT'])
     timeframe = data_spec.get('timeframe', '5m')
     since = data_spec.get('since')
     until = data_spec.get('until')
     
     if not symbols:
-        symbols = ['BTC/USDT:USDT']  # Fallback
+        symbols = ['BTC/USDT:USDT']
     
     symbol = symbols[0]
     db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
     
     if not os.path.exists(db_path):
-        # Return mock data se DB n�o existe
         import time
         now = int(time.time())
         mock_candles = []
         for i in range(100):
-            ts = (now - (100-i) * 300) * 1000  # 5min bars
+            ts = (now - (100-i) * 300) * 1000
             price = 42000 + (i * 10) + (i % 10) * 5
             mock_candles.append({
                 'time': int(ts / 1000),
@@ -378,7 +406,6 @@ async def get_run_equity(run_id: str):
     """Get equity curve data"""
     import csv
     import glob
-    import json
     from datetime import datetime
     
     pattern = os.path.join("artifacts", run_id, "*", "equity.csv")
@@ -397,7 +424,7 @@ async def get_run_equity(run_id: str):
             for row in reader:
                 trades.append({'exit_time': row['exit_time'], 'pnl': float(row['pnl'])})
         
-        trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time'])),
+        trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
   
         equity_data = []
         cumulative = 0.0
@@ -447,7 +474,6 @@ async def get_run_trades(run_id: str):
         with open(trades_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             
-            # Process broker format: group actions by position
             position_map = {}
             
             for row in reader:
@@ -459,33 +485,29 @@ async def get_run_trades(run_id: str):
                     price = float(row.get('price', 0))
                     pnl = float(row.get('pnl', 0))
                     
-                    # Handle OPEN actions
                     if 'OPEN' in action:
                         position_map[side] = {
                             'entry_time': ts_iso,
                             'entry_price': price,
-                            'side': side.lower(),  # Normalize to lowercase for frontend
+                            'side': side.lower(),
                             'exit_time': None,
                             'exit_price': None,
                             'pnl': 0.0,
                             'pnl_pct': 0.0
                         }
                     
-                    # Handle CLOSE actions (TP, STOP, etc)
                     elif side in position_map and ('TP' in action or 'STOP' in action or 'EXIT' in action):
                         pos = position_map[side]
                         pos['exit_time'] = ts_iso
                         pos['exit_price'] = price
                         pos['pnl'] += pnl
                         
-                        # Calculate pnl_pct
                         if pos['entry_price'] and pos['entry_price'] > 0:
                             if side == 'LONG':
                                 pos['pnl_pct'] = ((price - pos['entry_price']) / pos['entry_price']) * 100
                             else:
                                 pos['pnl_pct'] = ((pos['entry_price'] - price) / pos['entry_price']) * 100
                         
-                        # Add completed trade
                         if 'FULL' in action or 'STOP' in action or 'TIME_STOP' in action or 'MANUAL' in action:
                             trades.append(pos.copy())
                             del position_map[side]
@@ -503,8 +525,6 @@ async def get_run_trades(run_id: str):
         print(f"[get_run_trades] ERROR: {e}")
         traceback.print_exc()
         raise HTTPException(500, f"Error reading trades: {str(e)}")
-    
-    return {"trades": trades}
 
 
 @router.get("/runs", response_model=List[RunStatus])
@@ -515,18 +535,15 @@ async def list_runs(limit: int = 100):
     
     results = []
     for run in runs:
-        # Parse config to get starting equity
         try:
             config = json.loads(run.get('config_json', '{}'))
             starting_equity = config.get('risk', {}).get('starting_equity', 10000.0)
         except:
             starting_equity = 10000.0
  
-        # Get best score from trials
         trials = db_sqlite.get_run_trials(conn, run['id'], limit=1)
         best_score = trials[0]['score'] if trials else None
         
-        # Calculate final equity if completed
         final_equity = None
         if run['status'] == 'completed' and trials:
             try:
@@ -534,7 +551,8 @@ async def list_runs(limit: int = 100):
                 total_profit_pct = metrics.get('total_profit', 0)
                 final_equity = starting_equity * (1 + total_profit_pct / 100)
             except:
-                pass  
+                pass
+        
         results.append(RunStatus(
             run_id=run["id"], 
             status=run["status"], 
@@ -562,13 +580,11 @@ async def download_artifacts(run_id: str):
     if not artifact_files:
         raise HTTPException(404, "No artifacts found for this run")
     
-    # Create temporary ZIP file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
         zip_path = tmp_file.name
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file_path in artifact_files:
-                # Add file to ZIP with relative path
                 arcname = os.path.relpath(file_path, os.path.join("artifacts", run_id))
                 zipf.write(file_path, arcname)
   
@@ -593,7 +609,6 @@ async def compare_runs(run_ids: List[str]):
     comparison_data = []
     
     for run_id in run_ids:
-        # Get run info
         conn_lab = db_sqlite.connect_lab()
         run = db_sqlite.get_run(conn_lab, run_id)
         conn_lab.close()
@@ -601,12 +616,10 @@ async def compare_runs(run_ids: List[str]):
         if not run:
             continue
         
-        # Get equity data
         pattern = os.path.join("artifacts", run_id, "*", "equity.csv")
         equity_files = glob.glob(pattern)
       
         if not equity_files:
-            # Try to generate from trades
             trades_pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
             trades_files = glob.glob(trades_pattern)
          
@@ -641,7 +654,6 @@ async def compare_runs(run_ids: List[str]):
             except Exception:
                 continue
         
-        # Get final metrics
         trials = db_sqlite.get_run_trials(conn_lab, run_id, limit=1)
         final_metrics = trials[0]['metrics_json'] if trials else {}
         
