@@ -414,12 +414,12 @@ async def get_run_trades(run_id: str):
     """Get trades from artifacts for a run"""
     import csv
     import glob
-  
+    from datetime import datetime
+    
     pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
     trades_files = glob.glob(pattern)
     
     if not trades_files:
-        # Return empty list instead of 404 (0 trades é válido)
         return {"trades": []}
     
     trades_path = trades_files[0]
@@ -428,59 +428,62 @@ async def get_run_trades(run_id: str):
     try:
         with open(trades_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
+            
+            # Process broker format: group actions by position
+            position_map = {}
+            
             for row in reader:
-                # Safely parse each field with defaults
                 try:
-                    trades.append({
-                        'entry_time': row.get('entry_time', row.get('ts_utc', '')),
-                        'exit_time': row.get('exit_time', row.get('ts_exit_utc', '')),
-                        'side': row.get('side', 'UNKNOWN'),
-                        'entry_price': float(row.get('entry_price', row.get('price', 0))) if row.get('entry_price') or row.get('price') else None,
-                        'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
-                        'pnl': float(row.get('pnl', 0)),
-                        'pnl_pct': float(row.get('pnl_pct', 0))
-                    })
+                    action = row.get('action', '')
+                    side = row.get('side', 'UNKNOWN')
+                    ts_ms = int(row.get('ts_utc', 0))
+                    ts_iso = datetime.fromtimestamp(ts_ms / 1000).isoformat() if ts_ms else ''
+                    price = float(row.get('price', 0))
+                    pnl = float(row.get('pnl', 0))
+                    
+                    # Handle OPEN actions
+                    if 'OPEN' in action:
+                        position_map[side] = {
+                            'entry_time': ts_iso,
+                            'entry_price': price,
+                            'side': side,
+                            'exit_time': None,
+                            'exit_price': None,
+                            'pnl': 0.0,
+                            'pnl_pct': 0.0
+                        }
+                    
+                    # Handle CLOSE actions (TP, STOP, etc)
+                    elif side in position_map and ('TP' in action or 'STOP' in action or 'EXIT' in action):
+                        pos = position_map[side]
+                        pos['exit_time'] = ts_iso
+                        pos['exit_price'] = price
+                        pos['pnl'] += pnl
+                        
+                        # Calculate pnl_pct
+                        if pos['entry_price'] and pos['entry_price'] > 0:
+                            if side == 'LONG':
+                                pos['pnl_pct'] = ((price - pos['entry_price']) / pos['entry_price']) * 100
+                            else:
+                                pos['pnl_pct'] = ((pos['entry_price'] - price) / pos['entry_price']) * 100
+                        
+                        # Add completed trade
+                        if 'FULL' in action or 'STOP' in action or 'TIME_STOP' in action or 'MANUAL' in action:
+                            trades.append(pos.copy())
+                            del position_map[side]
+                
                 except (ValueError, KeyError) as e:
-                    print(f"[get_run_trades] Skipping malformed trade row: {e}")
+                    print(f"[get_run_trades] Skipping malformed row: {e}")
                     continue
- 
+        
+        return {"trades": trades}
+    
     except FileNotFoundError:
         return {"trades": []}
     except Exception as e:
         import traceback
         print(f"[get_run_trades] ERROR: {e}")
         traceback.print_exc()
-        raise HTTPException(500, f"Error reading trades: {str(e)}")
-    
-    return {"trades": trades}
-
-
-@router.get("/run/{run_id}/artifacts/{trial_id}/trades")
-async def get_trial_trades(run_id: str, trial_id: int):
-    """Get trades from artifacts for a specific trial"""
-    import csv
-    
-    trades_path = os.path.join("artifacts", run_id, str(trial_id), "trades.csv")
-    
-    if not os.path.exists(trades_path):
-        raise HTTPException(404, "Trades file not found")
-    
-    trades = []
-    
-    try:
-        with open(trades_path, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                trades.append({
-                    'entry_time': row['entry_time'],
-                    'exit_time': row['exit_time'],
-                    'side': row['side'],
-                    'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
-                    'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
-                    'pnl': float(row['pnl']),
-                    'pnl_pct': float(row['pnl_pct'])
-                })
-    except Exception as e:
         raise HTTPException(500, f"Error reading trades: {str(e)}")
     
     return {"trades": trades}
