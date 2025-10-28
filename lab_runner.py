@@ -1,4 +1,4 @@
-"""
+ï»¿"""
 Lab Runner - Asynchronous backtest execution system with WebSocket support
 """
 
@@ -135,64 +135,64 @@ def execute_backtest_task(run_id: str, config: StrategyConfig):
     try:
         db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
         log_run(run_id, "INFO", f"Starting backtest for strategy: {config.name}", progress=0.0)
-  
+        
         log_run(run_id, "INFO", "Loading historical data...", progress=0.1)
-   
+        
         # Create trial first to get artifact directory
         trial_id = db_sqlite.insert_trial(conn, run_id=run_id, trial_number=1, params={}, metrics={}, score=0.0)
         artifact_dir = get_artifact_dir(run_id, trial_id)
-   
-  log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
- 
-    # ? RUN REAL BACKTEST using production adapter
-     from lab_backtest_adapter import run_strategy_lab_backtest
+        
+        log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
+        
+        # âœ… RUN REAL BACKTEST using production adapter
+        from lab_backtest_adapter import run_strategy_lab_backtest
         
         log_run(run_id, "INFO", "Simulating trades...", progress=0.5)
         
         metrics = run_strategy_lab_backtest(config, artifact_dir)
         
-  log_run(run_id, "INFO", "Computing metrics...", progress=0.7)
-   
+        log_run(run_id, "INFO", "Computing metrics...", progress=0.7)
+        
         # Evaluate objective
         try:
-      score = evaluate_objective(metrics, config.objective.expression)
+            score = evaluate_objective(metrics, config.objective.expression)
             log_run(run_id, "INFO", f"Objective score: {score:.4f}", progress=0.85, best_score=score)
         except Exception as e:
             log_run(run_id, "ERROR", f"Failed to evaluate objective: {str(e)}", progress=0.85)
-         score = 0.0
-     
+            score = 0.0
+        
         # Update trial with real metrics
-     conn.execute("UPDATE trials SET metrics_json = ?, score = ? WHERE id = ?",
-        (json.dumps(metrics), score, trial_id))
+        conn.execute("UPDATE trials SET metrics_json = ?, score = ? WHERE id = ?",
+                     (json.dumps(metrics), score, trial_id))
         conn.commit()
- 
+        
         log_run(run_id, "INFO", "Saving artifacts...", progress=0.9, best_score=score)
         
         # Register artifacts in database
- trades_path = os.path.join(artifact_dir, "trades.csv")
+        trades_path = os.path.join(artifact_dir, "trades.csv")
         if os.path.exists(trades_path):
-  db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
-  
+            db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
+        
         equity_path = os.path.join(artifact_dir, "equity.csv")
         if os.path.exists(equity_path):
-       db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
+            db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
         
-      metrics_path = os.path.join(artifact_dir, "metrics.json")
+        metrics_path = os.path.join(artifact_dir, "metrics.json")
         if os.path.exists(metrics_path):
             db_sqlite.insert_artifact(conn, run_id, trial_id, "metrics", metrics_path)
         
-     db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
+        db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
         log_run(run_id, "INFO", f"Backtest completed successfully", progress=1.0, best_score=score)
     
     except Exception as e:
-   db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
+        db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
         error_msg = f"Backtest failed: {str(e)}\n{traceback.format_exc()}"
         log_run(run_id, "ERROR", error_msg, progress=1.0)
-
+    
     finally:
         conn.close()
         if run_id in _active_runs:
-     del _active_runs[run_id]
+            del _active_runs[run_id]
 
 
 def start_backtest_run(config: StrategyConfig) -> str:
@@ -328,7 +328,7 @@ def execute_grid_search_task(run_id: str, config: StrategyConfig):
         for trial_num, combination in enumerate(combinations[:total_trials], 1):
             params = dict(zip(keys, combination))
             
-            # Mock backtest with params (você implementa a lógica real aqui)
+            # Mock backtest with params (vocÃª implementa a lÃ³gica real aqui)
             metrics = {
                 'total_profit': 45.3 + trial_num * 0.1,
                 'sharpe': 2.1 + (trial_num % 10) * 0.05,
@@ -397,7 +397,7 @@ def execute_optuna_task(run_id: str, config: StrategyConfig, n_trials: int):
         best_score = float('-inf')
          
         for trial_num in range(1, n_trials + 1):
-            # Mock Optuna suggest (você implementa com optuna.create_study() real)
+            # Mock Optuna suggest (vocÃª implementa com optuna.create_study() real)
             params = {param.name: param.low + (param.high - param.low) * (trial_num / n_trials) for param in config.param_space}
                 
             # Mock backtest
