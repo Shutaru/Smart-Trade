@@ -2,7 +2,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 import os
-import json
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
@@ -245,8 +244,8 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
 async def get_run_candles(run_id: str):
     """Get OHLCV candles for the backtest period"""
     import sqlite3
+    import json
     
-    # Get run config to know symbol and timeframe
     conn_lab = db_sqlite.connect_lab()
     run = db_sqlite.get_run(conn_lab, run_id)
     conn_lab.close()
@@ -265,7 +264,6 @@ async def get_run_candles(run_id: str):
     if not symbols:
         raise HTTPException(400, "No symbols in config")
     
-    # Use first symbol for chart
     symbol = symbols[0]
     db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
     
@@ -274,32 +272,17 @@ async def get_run_candles(run_id: str):
     
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    
     table = db_sqlite.get_candles_table(timeframe)
     
     if since and until:
-        cur.execute(
-            f"SELECT ts, open, high, low, close, volume FROM {table} WHERE ts >= ? AND ts < ? ORDER BY ts ASC",
- (since, until)
-        )
+        cur.execute(f"SELECT ts, open, high, low, close, volume FROM {table} WHERE ts >= ? AND ts < ? ORDER BY ts ASC", (since, until))
     else:
         cur.execute(f"SELECT ts, open, high, low, close, volume FROM {table} ORDER BY ts ASC LIMIT 5000")
     
     rows = cur.fetchall()
     conn.close()
     
-    candles = [
-        {
-    'time': int(r[0] / 1000),  # Lightweight Charts uses seconds
-            'open': float(r[1]),
-            'high': float(r[2]),
-   'low': float(r[3]),
-    'close': float(r[4]),
-        'volume': float(r[5])
-        }
-   for r in rows
-    ]
-    
+    candles = [{'time': int(r[0] / 1000), 'open': float(r[1]), 'high': float(r[2]), 'low': float(r[3]), 'close': float(r[4]), 'volume': float(r[5])} for r in rows]
     return {'symbol': symbol, 'timeframe': timeframe, 'candles': candles}
 
 
@@ -308,69 +291,52 @@ async def get_run_equity(run_id: str):
     """Get equity curve data"""
     import csv
     import glob
+    import json
+    from datetime import datetime
     
-    # Find equity.csv in artifacts
     pattern = os.path.join("artifacts", run_id, "*", "equity.csv")
     equity_files = glob.glob(pattern)
     
     if not equity_files:
-        # If no equity.csv, generate from trades
-      trades_pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
+        trades_pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
         trades_files = glob.glob(trades_pattern)
-   
+        
         if not trades_files:
-    raise HTTPException(404, "No equity or trades data found")
+            raise HTTPException(404, "No equity or trades data found")
         
-        # Generate equity from trades
         trades = []
- with open(trades_files[0], 'r') as f:
- reader = csv.DictReader(f)
-for row in reader:
-              trades.append({
-            'exit_time': row['exit_time'],
-     'pnl': float(row['pnl'])
-                })
+        with open(trades_files[0], 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                trades.append({'exit_time': row['exit_time'], 'pnl': float(row['pnl'])})
         
-        # Sort by exit time and calculate cumulative
-        from datetime import datetime
-  trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
-        
+        trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
+  
         equity_data = []
         cumulative = 0.0
         max_equity = 0.0
         
-  for trade in trades:
+        for trade in trades:
             cumulative += trade['pnl']
             max_equity = max(max_equity, cumulative)
-  drawdown = ((cumulative - max_equity) / max(abs(max_equity), 1)) * 100 if max_equity > 0 else 0
-   
+            drawdown = ((cumulative - max_equity) / max(abs(max_equity), 1)) * 100 if max_equity > 0 else 0
             timestamp = int(datetime.fromisoformat(trade['exit_time']).timestamp())
-            equity_data.append({
-           'time': timestamp,
-          'equity': cumulative,
-     'drawdown': drawdown
-     })
-   
+            equity_data.append({'time': timestamp, 'equity': cumulative, 'drawdown': drawdown})
+        
         return {'equity': equity_data}
     
-    # Read equity.csv
     equity_path = equity_files[0]
     equity_data = []
     
     try:
-      with open(equity_path, 'r') as f:
-  reader = csv.DictReader(f)
-       for row in reader:
- from datetime import datetime
-   timestamp = int(datetime.fromisoformat(row['timestamp']).timestamp())
-          equity_data.append({
-         'time': timestamp,
-                    'equity': float(row['equity']),
-             'drawdown': float(row.get('drawdown', 0))
-})
+        with open(equity_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                timestamp = int(datetime.fromisoformat(row['timestamp']).timestamp())
+                equity_data.append({'time': timestamp, 'equity': float(row['equity']), 'drawdown': float(row.get('drawdown', 0))})
     except Exception as e:
         raise HTTPException(500, f"Error reading equity: {str(e)}")
-
+    
     return {'equity': equity_data}
 
 
@@ -378,40 +344,39 @@ for row in reader:
 async def get_run_trades(run_id: str):
     """Get trades from artifacts for a run"""
     import csv
- import glob
-    
-    # Find trades.csv in artifacts
+    import glob
+  
     pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
     trades_files = glob.glob(pattern)
     
     if not trades_files:
-     raise HTTPException(404, "Trades file not found")
+        raise HTTPException(404, "Trades file not found")
     
-    trades_path = trades_files[0]  # Get first match
-    
+    trades_path = trades_files[0]
     trades = []
+    
     try:
-  with open(trades_path, 'r') as f:
-         reader = csv.DictReader(f)
+        with open(trades_path, 'r') as f:
+            reader = csv.DictReader(f)
             for row in reader:
- trades.append({
-  'entry_time': row['entry_time'],
-'exit_time': row['exit_time'],
-         'side': row['side'],
- 'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
-               'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
-  'pnl': float(row['pnl']),
-      'pnl_pct': float(row['pnl_pct'])
-    })
+                trades.append({
+                    'entry_time': row['entry_time'],
+                    'exit_time': row['exit_time'],
+                    'side': row['side'],
+                    'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
+                    'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
+                    'pnl': float(row['pnl']),
+                    'pnl_pct': float(row['pnl_pct'])
+                })
     except Exception as e:
-      raise HTTPException(500, f"Error reading trades: {str(e)}")
+        raise HTTPException(500, f"Error reading trades: {str(e)}")
     
     return {"trades": trades}
 
 
 @router.get("/run/{run_id}/artifacts/{trial_id}/trades")
 async def get_trial_trades(run_id: str, trial_id: int):
-  """Get trades from artifacts for a specific trial"""
+    """Get trades from artifacts for a specific trial"""
     import csv
     
     trades_path = os.path.join("artifacts", run_id, str(trial_id), "trades.csv")
@@ -420,19 +385,20 @@ async def get_trial_trades(run_id: str, trial_id: int):
         raise HTTPException(404, "Trades file not found")
     
     trades = []
+    
     try:
         with open(trades_path, 'r') as f:
-       reader = csv.DictReader(f)
-         for row in reader:
-          trades.append({
- 'entry_time': row['entry_time'],
- 'exit_time': row['exit_time'],
-     'side': row['side'],
-               'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
-           'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
-           'pnl': float(row['pnl']),
-  'pnl_pct': float(row['pnl_pct'])
-          })
+            reader = csv.DictReader(f)
+            for row in reader:
+                trades.append({
+                    'entry_time': row['entry_time'],
+                    'exit_time': row['exit_time'],
+                    'side': row['side'],
+                    'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
+                    'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
+                    'pnl': float(row['pnl']),
+                    'pnl_pct': float(row['pnl_pct'])
+                })
     except Exception as e:
         raise HTTPException(500, f"Error reading trades: {str(e)}")
     
@@ -446,4 +412,4 @@ async def list_runs(limit: int = 100):
     runs = db_sqlite.get_all_runs(conn, limit)
     conn.close()
     
-  return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
+    return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
