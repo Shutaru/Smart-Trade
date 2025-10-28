@@ -35,12 +35,28 @@ http://localhost:5173/lab/strategy
 
 ### **Passo 1: Configurar Data**
 - Exchange: `bitget`
-- Symbol: `BTC/USDT:USDT`
+- Symbol: **IMPORTANTE - Clicar em "Select symbols..."**
+  - ?? Procurar: `BTC/USDT`
+  - ? Clicar em `BTC/USDT:USDT` para selecionar
+  - ? Deve aparecer como badge azul abaixo
 - Timeframe: `5m`
-- Period: **Últimos 90 dias** (clica "Last 90 days")
+- Start Date: **Definir data inicial** (ex: 90 dias atrás)
+- End Date: **Manter data atual**
+
+**?? CRITICAL:** Se não selecionares um símbolo, vai dar erro:
+```
+ValueError: No symbols specified in strategy configuration.
+```
+
+### **Passo 1.5: Backfill Data (SE NECESSÁRIO)**
+Se for a primeira vez com este símbolo:
+1. Certifica-te que `BTC/USDT:USDT` está selecionado
+2. Clica no botão **"Backfill Data"**
+3. Aguarda confirmação (pode demorar 10-30 segundos)
+4. Vais ver mensagem: "Backfill Complete - Downloaded X candles"
 
 ### **Passo 2: Criar Long Conditions**
-Clica em **"Add Long Condition"**:
+Clica em **"Add Long Condition"** no separador "Strategy":
 
 **Condição 1 (ALL):**
 - Indicator: `RSI`
@@ -56,17 +72,26 @@ Clica em **"Add Short Condition"**:
 - Value: `70`
 
 ### **Passo 4: Configurar Objective**
+No separador "Objective":
 - Expression: `sharpe - max_dd/20`
   - Maximiza Sharpe Ratio
   - Penaliza Drawdown
 
 ### **Passo 5: Configurar Risk**
+No separador "Risk":
 - Position Sizing: `Fixed USD`
 - Size Value: `1000`
 - Leverage: `3`
 
-### **Passo 6: Run Backtest**
-Clica no botão **"Run Backtest"** ??
+### **Passo 6: Validar Estratégia**
+Clica no botão **"Validate"** (canto superior direito)
+- ? Deve mostrar: "Strategy Valid"
+- ? Lista de features requeridos
+
+### **Passo 7: Run Backtest**
+Clica no botão **"Run"** ??
+- Modo já está em "Backtest"
+- Aguarda 30-60 segundos
 
 ---
 
