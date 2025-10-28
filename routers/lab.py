@@ -464,7 +464,7 @@ async def get_run_trades(run_id: str):
                         position_map[side] = {
                             'entry_time': ts_iso,
                             'entry_price': price,
-                            'side': side,
+                            'side': side.lower(),  # Normalize to lowercase for frontend
                             'exit_time': None,
                             'exit_price': None,
                             'pnl': 0.0,
