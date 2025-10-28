@@ -262,17 +262,22 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
     from lab_runner import get_run_results
     
     try:
-        # get_run_results já retorna dicts parsed, não precisa fazer json.loads novamente
+        # get_run_results já retorna dicts parsed
         results = get_run_results(run_id, limit, offset)
         
         # Criar TrialResult objects diretamente dos results
         trials = []
         for r in results:
             try:
+                # Remove _stats from metrics (nested dict não é compatível com Pydantic)
+                metrics = r['metrics'].copy()
+                if '_stats' in metrics:
+                    del metrics['_stats']
+                
                 trials.append(TrialResult(
                     trial_id=r['trial_id'],
-                    params=r['params'],  # Já é dict
-                    metrics=r['metrics'],  # Já é dict
+                    params=r['params'],
+                    metrics=metrics,  # Agora sem _stats
                     score=r['score']
                 ))
             except Exception as e:
@@ -414,25 +419,37 @@ async def get_run_trades(run_id: str):
     trades_files = glob.glob(pattern)
     
     if not trades_files:
-        raise HTTPException(404, "Trades file not found")
+        # Return empty list instead of 404 (0 trades é válido)
+        return {"trades": []}
     
     trades_path = trades_files[0]
     trades = []
     
     try:
-        with open(trades_path, 'r') as f:
+        with open(trades_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                trades.append({
-                    'entry_time': row['entry_time'],
-                    'exit_time': row['exit_time'],
-                    'side': row['side'],
-                    'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
-                    'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
-                    'pnl': float(row['pnl']),
-                    'pnl_pct': float(row['pnl_pct'])
-                });
+                # Safely parse each field with defaults
+                try:
+                    trades.append({
+                        'entry_time': row.get('entry_time', row.get('ts_utc', '')),
+                        'exit_time': row.get('exit_time', row.get('ts_exit_utc', '')),
+                        'side': row.get('side', 'UNKNOWN'),
+                        'entry_price': float(row.get('entry_price', row.get('price', 0))) if row.get('entry_price') or row.get('price') else None,
+                        'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
+                        'pnl': float(row.get('pnl', 0)),
+                        'pnl_pct': float(row.get('pnl_pct', 0))
+                    })
+                except (ValueError, KeyError) as e:
+                    print(f"[get_run_trades] Skipping malformed trade row: {e}")
+                    continue
+ 
+    except FileNotFoundError:
+        return {"trades": []}
     except Exception as e:
+        import traceback
+        print(f"[get_run_trades] ERROR: {e}")
+        traceback.print_exc()
         raise HTTPException(500, f"Error reading trades: {str(e)}")
     
     return {"trades": trades}
