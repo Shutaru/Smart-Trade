@@ -80,22 +80,35 @@ class StrategyLabBacktestEngine:
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """Load OHLCV data from SQLite database"""
         
-        if not self.config.data.symbols:
-            raise ValueError("No symbols specified in config")
+        # Validate symbols
+        if not self.config.data.symbols or len(self.config.data.symbols) == 0:
+            raise ValueError(
+                "No symbols specified in strategy configuration.\n"
+                "Please add at least one symbol in the Data tab:\n"
+                "1. Click on 'Select symbols...'\n"
+                "2. Search and select a symbol (e.g., BTC/USDT:USDT)\n"
+                "3. Click outside to confirm selection"
+            )
         
         symbol = self.config.data.symbols[0]
         timeframe = self.config.data.timeframe
         exchange = self.config.data.exchange
+    
+        print(f"[Backtest] Loading {symbol} @ {timeframe} from {exchange}")
         
         # Get database path
         db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
         
         if not os.path.exists(db_path):
             raise FileNotFoundError(
-                f"Database not found: {db_path}. "
-                f"Run backfill first: POST /api/lab/backfill"
+                f"Database not found: {db_path}\n"
+                f"Please backfill data first:\n"
+                f"1. In Data tab, select symbol: {symbol}\n"
+                f"2. Click 'Backfill Data' button\n"
+                f"3. Wait for confirmation\n"
+                f"4. Then run backtest again"
             )
-        
+  
         # Connect and load candles
         conn = db_sqlite.connect(db_path, timeframe)
         
@@ -109,8 +122,13 @@ class StrategyLabBacktestEngine:
         conn.close()
         
         if not rows:
-            return None
-        
+            raise ValueError(
+                f"No data found for {symbol} in the specified date range.\n"
+                f"Period: {datetime.fromtimestamp(self.config.data.since/1000).strftime('%Y-%m-%d')} to "
+                f"{datetime.fromtimestamp(self.config.data.until/1000).strftime('%Y-%m-%d')}\n"
+                f"Try backfilling data or adjusting the date range."
+            )
+     
         # Convert to DataFrame
         df = pd.DataFrame(rows, columns=['ts', 'open', 'high', 'low', 'close', 'volume'])
         df['ts'] = df['ts'].astype(int)
