@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown, Download } from 'lucide-react';
 import { TradesTable } from './TradesTable';
 import { TradingChart } from './TradingChart';
 
@@ -157,22 +157,35 @@ case 'completed':
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-     <Button
- variant="ghost"
- size="icon"
-  onClick={() => navigate('/lab/strategy')}
-          >
-    <ArrowLeft className="h-4 w-4" />
-    </Button>
-          <div>
-   <h1 className="text-3xl font-bold">Run Results</h1>
-     <p className="text-sm text-muted-foreground">
-    {statusData?.name || 'Loading...'} • Run ID: {runId?.substring(0, 8)}...
+   <div className="flex items-center gap-4">
+      <Button
+                variant="ghost"
+       size="icon"
+    onClick={() => navigate('/lab/strategy')}
+            >
+   <ArrowLeft className="h-4 w-4" />
+            </Button>
+ <div>
+        <h1 className="text-3xl font-bold">Run Results</h1>
+    <p className="text-sm text-muted-foreground">
+  {statusData?.name || 'Loading...'} • Run ID: {runId?.substring(0, 8)}...
         </p>
-      </div>
+     </div>
         </div>
-        {statusData && getStatusBadge(statusData.status)}
+<div className="flex items-center gap-2">
+            {statusData?.status === 'completed' && (
+ <Button
+         variant="outline"
+       size="sm"
+        onClick={() => window.open(`/api/lab/run/${runId}/download`, '_blank')}
+   className="gap-2"
+    >
+        <Download className="h-4 w-4" />
+   Download Artifacts
+         </Button>
+ )}
+            {statusData && getStatusBadge(statusData.status)}
+   </div>
       </div>
 
       {/* Status Card */}

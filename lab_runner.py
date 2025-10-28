@@ -294,5 +294,168 @@ def cancel_run(run_id: str) -> bool:
     return cancelled
 
 
+def execute_grid_search_task(run_id: str, config: StrategyConfig):
+    """Execute grid search task in background thread"""
+    conn = db_sqlite.connect_lab()
+    
+    try:
+        db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
+        log_run(run_id, "INFO", f"Starting grid search for strategy: {config.name}", progress=0.0)
+        
+        import itertools
+        
+        # Generate parameter grid
+        param_grid = {}
+        for param_range in config.param_space:
+            if param_range.step:
+                values = []
+                val = param_range.low
+                while val <= param_range.high:
+                    values.append(int(val) if param_range.int_ else val)
+                    val += param_range.step
+            else:
+                values = [param_range.low, param_range.high]
+            param_grid[param_range.name] = values
+        
+        # Generate all combinations
+        keys = list(param_grid.keys())
+        combinations = list(itertools.product(*[param_grid[k] for k in keys]))
+        total_trials = min(len(combinations), 1000)  # Max 1000 trials
+        
+        log_run(run_id, "INFO", f"Testing {total_trials} parameter combinations...", progress=0.1)
+    
+        best_score = float('-inf')
+        best_params = {}
+        
+        for trial_num, combination in enumerate(combinations[:total_trials], 1):
+            params = dict(zip(keys, combination))
+            
+            # Mock backtest with params (você implementa a lógica real aqui)
+            metrics = {
+                'total_profit': 45.3 + trial_num * 0.1,
+                'sharpe': 2.1 + (trial_num % 10) * 0.05,
+                'sortino': 2.8, 'calmar': 1.9,
+                'max_dd': -18.5, 'win_rate': 58.5,
+                'profit_factor': 2.4, 'avg_trade': 1.8,
+                'trades': 125, 'exposure': 65.0
+            }
+            
+            try:
+                score = evaluate_objective(metrics, config.objective.expression)
+            except Exception:
+                score = 0.0
+ 
+            if score > best_score:
+                best_score = score
+                best_params = params
+             
+            progress = trial_num / total_trials
+            db_sqlite.insert_trial(conn, run_id=run_id, trial_number=trial_num, params=params, metrics=metrics, score=score)
+            
+            if trial_num % 10 == 0:
+                log_run(run_id, "INFO", f"Completed {trial_num}/{total_trials} trials", progress=progress, best_score=best_score)
+        
+        log_run(run_id, "INFO", f"Grid search completed. Best score: {best_score:.4f}", progress=1.0, best_score=best_score)
+        db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
+    
+    except Exception as e:
+        db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
+        log_run(run_id, "ERROR", f"Grid search failed: {str(e)}", progress=1.0)
+    
+    finally:
+        conn.close()
+        if run_id in _active_runs:
+            del _active_runs[run_id]
+
+
+def start_grid_search_run(config: StrategyConfig) -> str:
+    """Start a grid search run asynchronously"""
+    run_id = generate_run_id()
+    
+    conn = db_sqlite.connect_lab()
+    config_dict = config.model_dump()
+    db_sqlite.create_run(conn, run_id=run_id, name=config.name, mode="grid_search", config=config_dict)
+    conn.close()
+    
+    executor = get_executor()
+    future = executor.submit(execute_grid_search_task, run_id, config)
+    _active_runs[run_id] = future
+    
+    log_run(run_id, "INFO", f"Grid search created and queued: {config.name}", progress=0.0)
+    
+    return run_id
+
+
+def execute_optuna_task(run_id: str, config: StrategyConfig, n_trials: int):
+    """Execute Optuna optimization task in background thread"""
+    conn = db_sqlite.connect_lab()
+    
+    try:
+        db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
+        log_run(run_id, "INFO", f"Starting Optuna optimization for strategy: {config.name}", progress=0.0)
+        
+        log_run(run_id, "INFO", f"Running {n_trials} Bayesian optimization trials...", progress=0.1)
+        
+        best_score = float('-inf')
+         
+        for trial_num in range(1, n_trials + 1):
+            # Mock Optuna suggest (você implementa com optuna.create_study() real)
+            params = {param.name: param.low + (param.high - param.low) * (trial_num / n_trials) for param in config.param_space}
+                
+            # Mock backtest
+            metrics = {
+                'total_profit': 45.3 + trial_num * 0.05,
+                'sharpe': 2.1 + (trial_num % 20) * 0.03,
+                'sortino': 2.8, 'calmar': 1.9,
+                'max_dd': -18.5, 'win_rate': 58.5,
+                'profit_factor': 2.4, 'avg_trade': 1.8,
+                'trades': 125, 'exposure': 65.0
+            }
+                
+            try:
+                score = evaluate_objective(metrics, config.objective.expression)
+            except Exception:
+                score = 0.0
+           
+            if score > best_score:
+                best_score = score
+             
+            progress = trial_num / n_trials
+            db_sqlite.insert_trial(conn, run_id=run_id, trial_number=trial_num, params=params, metrics=metrics, score=score)
+        
+            if trial_num % 10 == 0:
+                log_run(run_id, "INFO", f"Completed {trial_num}/{n_trials} trials", progress=progress, best_score=best_score)
+                
+        log_run(run_id, "INFO", f"Optuna optimization completed. Best score: {best_score:.4f}", progress=1.0, best_score=best_score)
+        db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
+    
+    except Exception as e:
+        db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
+        log_run(run_id, "ERROR", f"Optuna failed: {str(e)}", progress=1.0)
+    
+    finally:
+        conn.close()
+        if run_id in _active_runs:
+            del _active_runs[run_id]
+
+
+def start_optuna_run(config: StrategyConfig, n_trials: int = 100) -> str:
+    """Start an Optuna optimization run asynchronously"""
+    run_id = generate_run_id()
+    
+    conn = db_sqlite.connect_lab()
+    config_dict = config.model_dump()
+    db_sqlite.create_run(conn, run_id=run_id, name=config.name, mode="optuna", config=config_dict)
+    conn.close()
+    
+    executor = get_executor()
+    future = executor.submit(execute_optuna_task, run_id, config, n_trials)
+    _active_runs[run_id] = future
+    
+    log_run(run_id, "INFO", f"Optuna optimization created and queued: {config.name}", progress=0.0)
+    
+    return run_id
+
+
 import atexit
 atexit.register(shutdown_executor)

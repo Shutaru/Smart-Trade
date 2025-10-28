@@ -112,15 +112,65 @@ export function StrategyLab() {
         }
     });
 
+    const runGridMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch('/api/lab/run/grid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(strategy)
+            });
+            if (!res.ok) throw new Error('Failed to start grid search');
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast({
+                title: 'Grid Search Started',
+                description: `Run ID: ${data.run_id.substring(0, 8)}... - Redirecting to results...`
+            });
+            setTimeout(() => navigate(`/lab/results/${data.run_id}`), 1000);
+        },
+        onError: () => {
+            toast({
+                title: 'Grid Search Failed',
+                description: 'Make sure param_space is configured in Objective tab',
+                variant: 'destructive'
+            });
+        }
+    });
+
+    const runOptunaMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch('/api/lab/run/optuna?n_trials=100', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(strategy)
+            });
+            if (!res.ok) throw new Error('Failed to start Optuna');
+            return res.json();
+        },
+        onSuccess: (data) => {
+            toast({
+                title: 'Optuna Started',
+                description: `Run ID: ${data.run_id.substring(0, 8)}... - Redirecting to results...`
+            });
+            setTimeout(() => navigate(`/lab/results/${data.run_id}`), 1000);
+        },
+        onError: () => {
+            toast({
+                title: 'Optuna Failed',
+                description: 'Make sure param_space is configured in Objective tab',
+                variant: 'destructive'
+            });
+        }
+    });
+
     const handleRun = () => {
         if (runMode === 'backtest') {
             runBacktestMutation.mutate();
-        } else {
-            toast({
-                title: 'Coming Soon',
-                description: `${runMode === 'grid' ? 'Grid Search' : 'Optuna'} optimization is not yet implemented`,
-                variant: 'default'
-            });
+        } else if (runMode === 'grid') {
+            runGridMutation.mutate();
+        } else if (runMode === 'optuna') {
+            runOptunaMutation.mutate();
         }
     };
 

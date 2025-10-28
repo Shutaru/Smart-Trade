@@ -206,6 +206,36 @@ async def run_backtest(config: StrategyConfig):
         raise HTTPException(500, f"Failed to start backtest: {str(e)}")
 
 
+@router.post("/run/grid", response_model=RunResponse)
+async def run_grid_search(config: StrategyConfig):
+    """Start a grid search optimization run asynchronously"""
+    from lab_runner import start_grid_search_run
+    
+    try:
+        if not config.param_space or len(config.param_space) == 0:
+            raise HTTPException(400, "Grid search requires param_space to be defined")
+        
+        run_id = start_grid_search_run(config)
+        return RunResponse(run_id=run_id, status="pending")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to start grid search: {str(e)}")
+
+
+@router.post("/run/optuna", response_model=RunResponse)
+async def run_optuna_optimization(config: StrategyConfig, n_trials: int = 100):
+    """Start an Optuna Bayesian optimization run asynchronously"""
+    from lab_runner import start_optuna_run
+    
+    try:
+        if not config.param_space or len(config.param_space) == 0:
+            raise HTTPException(400, "Optuna requires param_space to be defined")
+ 
+        run_id = start_optuna_run(config, n_trials=n_trials)
+        return RunResponse(run_id=run_id, status="pending")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to start Optuna: {str(e)}")
+
+
 @router.get("/run/{run_id}/status", response_model=RunStatus)
 async def get_run_status_endpoint(run_id: str):
     """Get status of a running or completed backtest"""
@@ -367,7 +397,7 @@ async def get_run_trades(run_id: str):
                     'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
                     'pnl': float(row['pnl']),
                     'pnl_pct': float(row['pnl_pct'])
-                })
+                });
     except Exception as e:
         raise HTTPException(500, f"Error reading trades: {str(e)}")
     
@@ -413,3 +443,111 @@ async def list_runs(limit: int = 100):
     conn.close()
     
     return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
+
+
+@router.get("/run/{run_id}/download")
+async def download_artifacts(run_id: str):
+    """Download all artifacts as a ZIP file"""
+    import glob
+    import zipfile
+    import tempfile
+    from fastapi.responses import FileResponse
+    
+    artifacts_pattern = os.path.join("artifacts", run_id, "*", "*")
+    artifact_files = glob.glob(artifacts_pattern)
+    
+    if not artifact_files:
+        raise HTTPException(404, "No artifacts found for this run")
+    
+    # Create temporary ZIP file
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+        zip_path = tmp_file.name
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in artifact_files:
+                # Add file to ZIP with relative path
+                arcname = os.path.relpath(file_path, os.path.join("artifacts", run_id))
+                zipf.write(file_path, arcname)
+  
+        return FileResponse(
+            zip_path,
+            media_type='application/zip',
+            filename=f'artifacts_{run_id[:8]}.zip',
+            headers={"Content-Disposition": f"attachment; filename=artifacts_{run_id[:8]}.zip"}
+        )
+
+
+@router.post("/compare")
+async def compare_runs(run_ids: List[str]):
+    """Compare multiple runs - returns equity curves for overlay"""
+    import csv
+    import glob
+    from datetime import datetime
+    
+    if len(run_ids) > 10:
+        raise HTTPException(400, "Maximum 10 runs can be compared at once")
+    
+    comparison_data = []
+    
+    for run_id in run_ids:
+        # Get run info
+        conn_lab = db_sqlite.connect_lab()
+        run = db_sqlite.get_run(conn_lab, run_id)
+        conn_lab.close()
+        
+        if not run:
+            continue
+        
+        # Get equity data
+        pattern = os.path.join("artifacts", run_id, "*", "equity.csv")
+        equity_files = glob.glob(pattern)
+      
+        if not equity_files:
+            # Try to generate from trades
+            trades_pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
+            trades_files = glob.glob(trades_pattern)
+         
+            if not trades_files:
+                continue
+  
+            trades = []
+            with open(trades_files[0], 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    trades.append({'exit_time': row['exit_time'], 'pnl': float(row['pnl'])})
+     
+            trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
+           
+            equity_data = []
+            cumulative = 0.0
+     
+            for trade in trades:
+                cumulative += trade['pnl']
+                timestamp = int(datetime.fromisoformat(trade['exit_time']).timestamp())
+                equity_data.append({'time': timestamp, 'equity': cumulative})
+        else:
+            equity_path = equity_files[0]
+            equity_data = []
+ 
+            try:
+                with open(equity_path, 'r') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        timestamp = int(datetime.fromisoformat(row['timestamp']).timestamp())
+                        equity_data.append({'time': timestamp, 'equity': float(row['equity'])})
+            except Exception:
+                continue
+        
+        # Get final metrics
+        trials = db_sqlite.get_run_trials(conn_lab, run_id, limit=1)
+        final_metrics = trials[0]['metrics_json'] if trials else {}
+        
+        comparison_data.append({
+            'run_id': run_id,
+            'name': run['name'],
+            'equity': equity_data,
+            'metrics': final_metrics,
+            'status': run['status']
+        })
+    
+    return {'runs': comparison_data}

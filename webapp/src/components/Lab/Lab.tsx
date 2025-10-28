@@ -6,7 +6,7 @@ import WalkForwardCard from './WalkForwardCard';
 import OptunaCard from './OptunaCard';
 import RunsList from './RunsList';
 import { Button } from '@/components/ui/button';
-import { Beaker } from 'lucide-react';
+import { Beaker, GitCompare } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Lab: React.FC = () => {
@@ -28,10 +28,16 @@ const Lab: React.FC = () => {
         <div>
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Strategy Lab</h1>
-                <Button onClick={() => navigate('/lab/strategy')} className="gap-2">
-                    <Beaker className="h-4 w-4" />
-                    Strategy Builder
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={() => navigate('/lab/compare')} variant="outline" className="gap-2">
+                        <GitCompare className="h-4 w-4" />
+                        Compare Runs
+                    </Button>
+                    <Button onClick={() => navigate('/lab/strategy')} className="gap-2">
+                        <Beaker className="h-4 w-4" />
+                        Strategy Builder
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
