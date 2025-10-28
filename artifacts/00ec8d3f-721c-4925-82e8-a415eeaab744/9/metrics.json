@@ -1,0 +1,13 @@
+{
+  "total_profit": 45.3,
+  "sharpe": 2.1,
+  "sortino": 2.8,
+  "calmar": 1.9,
+  "max_dd": -18.5,
+  "win_rate": 58.5,
+  "profit_factor": 2.4,
+  "avg_trade": 1.8,
+  "trades": 125,
+  "exposure": 65.0,
+  "pnl_std": 2.3
+}
