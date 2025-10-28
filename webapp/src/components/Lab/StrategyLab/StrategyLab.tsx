@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, XCircle, Loader2, Play } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CheckCircle2, XCircle, Loader2, Play, Grid3x3, Target } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
 import { DataSelector } from './DataSelector';
@@ -60,6 +61,7 @@ export function StrategyLab() {
     const navigate = useNavigate();
     const [strategy, setStrategy] = useState(defaultStrategy);
     const [validationResult, setValidationResult] = useState<any>(null);
+    const [runMode, setRunMode] = useState<'backtest' | 'grid' | 'optuna'>('backtest');
 
     const validateMutation = useMutation({
         mutationFn: async () => {
@@ -110,6 +112,27 @@ export function StrategyLab() {
         }
     });
 
+    const handleRun = () => {
+        if (runMode === 'backtest') {
+            runBacktestMutation.mutate();
+        } else {
+            toast({
+                title: 'Coming Soon',
+                description: `${runMode === 'grid' ? 'Grid Search' : 'Optuna'} optimization is not yet implemented`,
+                variant: 'default'
+            });
+        }
+    };
+
+    const runModeConfig = {
+        backtest: { icon: Play, label: 'Backtest', color: 'text-blue-500' },
+        grid: { icon: Grid3x3, label: 'Grid Search', color: 'text-purple-500' },
+        optuna: { icon: Target, label: 'Optuna', color: 'text-orange-500' }
+    };
+
+    const currentMode = runModeConfig[runMode];
+    const CurrentIcon = currentMode.icon;
+
     return (
         <div className="container mx-auto py-8 space-y-6">
             <div className="flex items-center justify-between">
@@ -126,14 +149,41 @@ export function StrategyLab() {
                         {validateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Validate
                     </Button>
+
+                    <Select value={runMode} onValueChange={(v: any) => setRunMode(v)}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="backtest">
+                                <div className="flex items-center gap-2">
+                                    <Play className="h-4 w-4 text-blue-500" />
+                                    Backtest
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="grid">
+                                <div className="flex items-center gap-2">
+                                    <Grid3x3 className="h-4 w-4 text-purple-500" />
+                                    Grid Search
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="optuna">
+                                <div className="flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-orange-500" />
+                                    Optuna
+                                </div>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <Button
-                        onClick={() => runBacktestMutation.mutate()}
+                        onClick={handleRun}
                         disabled={!validationResult?.valid || runBacktestMutation.isPending}
                         className="gap-2"
                     >
                         {runBacktestMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <Play className="h-4 w-4" />
-                        Run Backtest
+                        <CurrentIcon className="h-4 w-4" />
+                        Run
                     </Button>
                 </div>
             </div>
