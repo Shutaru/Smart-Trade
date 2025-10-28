@@ -509,12 +509,43 @@ async def get_run_trades(run_id: str):
 
 @router.get("/runs", response_model=List[RunStatus])
 async def list_runs(limit: int = 100):
-    """List all runs"""
+    """List all runs with summary info"""
     conn = db_sqlite.connect_lab()
     runs = db_sqlite.get_all_runs(conn, limit)
-    conn.close()
     
-    return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
+    results = []
+    for run in runs:
+        # Parse config to get starting equity
+        try:
+            config = json.loads(run.get('config_json', '{}'))
+            starting_equity = config.get('risk', {}).get('starting_equity', 10000.0)
+        except:
+            starting_equity = 10000.0
+ 
+        # Get best score from trials
+        trials = db_sqlite.get_run_trials(conn, run['id'], limit=1)
+        best_score = trials[0]['score'] if trials else None
+        
+        # Calculate final equity if completed
+        final_equity = None
+        if run['status'] == 'completed' and trials:
+            try:
+                metrics = json.loads(trials[0]['metrics_json'])
+                total_profit_pct = metrics.get('total_profit', 0)
+                final_equity = starting_equity * (1 + total_profit_pct / 100)
+            except:
+                pass  
+        results.append(RunStatus(
+            run_id=run["id"], 
+            status=run["status"], 
+            progress=1.0 if run["status"] == "completed" else 0.0,
+            best_score=best_score,
+            started_at=run.get("started_at"), 
+            completed_at=run.get("completed_at")
+        ))
+    
+    conn.close()
+    return results
 
 
 @router.get("/run/{run_id}/download")

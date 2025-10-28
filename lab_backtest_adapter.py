@@ -169,9 +169,11 @@ class StrategyLabBacktestEngine:
         
         # Use starting_equity from risk configuration
         equity = risk.starting_equity
-     
- broker = PaperFuturesBroker(
-            equity=equity,
+        
+        print(f"[Backtest] Starting with ${equity:,.2f} equity")
+        
+        broker = PaperFuturesBroker(
+      equity=equity,
             max_daily_loss_pct=2.0,
             partial_tp_at_R=1.0,
             trail_atr_mult=2.0,

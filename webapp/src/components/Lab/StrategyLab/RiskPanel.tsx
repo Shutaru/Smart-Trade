@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 interface RiskPanelProps {
   value: {
@@ -15,6 +16,10 @@ interface RiskPanelProps {
 }
 
 export function RiskPanel({ value, onChange }: RiskPanelProps) {
+  // Calculate suggested position size based on starting equity
+  const suggestedPositionSize = Math.floor((value.starting_equity || 10000) * 0.1); // 10% of equity
+  const maxPositionSize = Math.floor((value.starting_equity || 10000) * 0.25); // 25% max
+
   return (
     <Card>
       <CardHeader>
@@ -29,11 +34,16 @@ export function RiskPanel({ value, onChange }: RiskPanelProps) {
             id="starting-equity"
             type="number"
             value={value.starting_equity || 10000}
-            onChange={(e) => onChange({ ...value, starting_equity: parseFloat(e.target.value) })}
+            onChange={(e) => {
+              const newEquity = parseFloat(e.target.value);
+              onChange({ ...value, starting_equity: newEquity });
+            }}
             placeholder="10000"
+            min={1000}
+            max={10000000}
           />
           <p className="text-xs text-muted-foreground">
-            Initial portfolio value in USDT (default: $10,000)
+            Initial portfolio value in USDT (min: $1,000, max: $10M)
           </p>
         </div>
 
@@ -44,6 +54,8 @@ export function RiskPanel({ value, onChange }: RiskPanelProps) {
               type="number"
               value={value.leverage}
               onChange={(e) => onChange({ ...value, leverage: parseFloat(e.target.value) })}
+              min={1}
+              max={125}
             />
           </div>
 
@@ -53,6 +65,8 @@ export function RiskPanel({ value, onChange }: RiskPanelProps) {
               type="number"
               value={value.max_concurrent_positions}
               onChange={(e) => onChange({ ...value, max_concurrent_positions: parseInt(e.target.value) })}
+              min={1}
+              max={10}
             />
           </div>
         </div>
@@ -79,11 +93,29 @@ export function RiskPanel({ value, onChange }: RiskPanelProps) {
             onChange={(e) => onChange({ ...value, size_value: parseFloat(e.target.value) })}
             placeholder="1000"
           />
-          <p className="text-xs text-muted-foreground">
-            {value.position_sizing === 'fixed_usd'
-              ? 'Fixed USD value per trade'
-              : 'Percentage of equity per trade'}
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground">
+              {value.position_sizing === 'fixed_usd'
+                ? 'Fixed USD value per trade'
+                : 'Percentage of equity per trade'}
+            </p>
+            {value.position_sizing === 'fixed_usd' && (
+              <div className="flex gap-2 text-xs">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onChange({ ...value, size_value: suggestedPositionSize })}
+                  className="h-6 text-xs"
+                >
+                  Suggested: ${suggestedPositionSize.toLocaleString()}
+                </Button>
+                <span className="text-muted-foreground self-center">
+                  (10% of equity, max: ${maxPositionSize.toLocaleString()})
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
