@@ -6,6 +6,7 @@ import Bots from "@/components/Bots/Bots";
 import BotDetail from "@/components/Bots/BotDetail";
 import Lab from "@/components/Lab/Lab";
 import { StrategyLab } from "@/components/Lab/StrategyLab/StrategyLab";
+import { RunResults } from "@/components/Lab/StrategyLab/RunResults";
 import Data from "@/components/Data/Data";
 import Reports from "@/components/Reports/Reports";
 import Settings from "@/components/Settings/Settings";
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
             { path: "bots/:botId", element: <BotDetail /> },
             { path: "lab", element: <Lab /> },
             { path: "lab/strategy", element: <StrategyLab /> },
+            { path: "lab/results/:runId", element: <RunResults /> },
             { path: "data", element: <Data /> },
             { path: "reports", element: <Reports /> },
             { path: "settings", element: <Settings /> },
