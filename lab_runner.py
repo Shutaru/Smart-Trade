@@ -167,15 +167,28 @@ def execute_backtest_task(run_id: str, config: StrategyConfig):
         artifact_dir = get_artifact_dir(run_id, trial_id)
         log_run(run_id, "INFO", "Saving artifacts...", progress=0.9, best_score=score)
         
+        # Create mock trades.csv with proper format
         trades_path = os.path.join(artifact_dir, "trades.csv")
         with open(trades_path, 'w') as f:
-            f.write("entry_time,exit_time,side,pnl,pnl_pct\n")
-            f.write("2024-01-01 10:00,2024-01-01 15:00,long,150.50,2.3\n")
+            f.write("entry_time,exit_time,side,entry_price,exit_price,pnl,pnl_pct\n")
+            # Mock some trades
+            f.write("2024-01-01T10:00:00,2024-01-01T15:00:00,long,42000.0,42500.0,150.50,2.3\n")
+            f.write("2024-01-02T08:00:00,2024-01-02T12:00:00,long,42500.0,42800.0,85.25,1.8\n")
+            f.write("2024-01-03T14:00:00,2024-01-03T18:00:00,short,43000.0,42700.0,120.00,1.9\n")
+            f.write("2024-01-04T10:00:00,2024-01-04T11:30:00,long,42700.0,42600.0,-35.00,-0.8\n")
+            f.write("2024-01-05T09:00:00,2024-01-05T16:00:00,short,42600.0,42400.0,95.50,1.5\n")
         db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
         
-        equity_path = os.path.join(artifact_dir, "equity.png")
+        # Create mock equity.csv
+        equity_path = os.path.join(artifact_dir, "equity.csv")
         with open(equity_path, 'w') as f:
-            f.write("# Mock equity curve\n")
+            f.write("timestamp,equity,drawdown\n")
+            cumulative = 0.0
+            for i, pnl in enumerate([150.50, 85.25, 120.00, -35.00, 95.50]):
+                cumulative += pnl
+                dd = max(0, (150.50 + 85.25 - cumulative) / max(150.50 + 85.25, 1)) * 100
+                ts = datetime.fromtimestamp(int(time.time()) - (5-i) * 86400).isoformat()
+                f.write(f"{ts},{cumulative},{dd}\n")
         db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
         
         metrics_path = os.path.join(artifact_dir, "metrics.json")
