@@ -261,12 +261,31 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
     """Get results (trials) for a completed run"""
     from lab_runner import get_run_results
     
-    
     try:
+        # get_run_results já retorna dicts parsed, não precisa fazer json.loads novamente
         results = get_run_results(run_id, limit, offset)
-        trials = [TrialResult(trial_id=r['trial_id'], params=r['params'], metrics=r['metrics'], score=r['score']) for r in results]
+        
+        # Criar TrialResult objects diretamente dos results
+        trials = []
+        for r in results:
+            try:
+                trials.append(TrialResult(
+                    trial_id=r['trial_id'],
+                    params=r['params'],  # Já é dict
+                    metrics=r['metrics'],  # Já é dict
+                    score=r['score']
+                ))
+            except Exception as e:
+                print(f"[get_run_results_endpoint] Error creating TrialResult: {e}")
+                # Skip malformed trial
+                continue
+        
         return RunResultsResponse(run_id=run_id, trials=trials, total=len(trials))
+    
     except Exception as e:
+        import traceback
+        print(f"[get_run_results_endpoint] ERROR: {e}")
+        traceback.print_exc()
         raise HTTPException(500, f"Failed to get results: {str(e)}")
 
 
@@ -355,7 +374,7 @@ async def get_run_equity(run_id: str):
             for row in reader:
                 trades.append({'exit_time': row['exit_time'], 'pnl': float(row['pnl'])})
         
-        trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time']))
+        trades.sort(key=lambda x: datetime.fromisoformat(x['exit_time'])),
   
         equity_data = []
         cumulative = 0.0
