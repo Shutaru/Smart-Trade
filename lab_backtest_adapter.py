@@ -137,12 +137,30 @@ class StrategyLabBacktestEngine:
         return df
     
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate all required technical indicators"""
+        """Calculate all required technical indicators while preserving OHLCV columns"""
         
-        # Use lab_features to calculate standard indicators
-        df_with_features = calculate_features(df)
+        # Keep original OHLCV columns
+        df_ohlcv = df[['ts', 'open', 'high', 'low', 'close', 'volume']].copy()
+  
+        # Calculate indicators using lab_features
+        df_indicators = calculate_features(df)
         
-        return df_with_features
+        # Merge OHLCV with indicators on 'ts' column
+        df_complete = pd.merge(
+            df_ohlcv,
+            df_indicators,
+            on='ts',
+            how='left',
+            suffixes=('', '_indicator')
+        )
+        
+        # Remove duplicate columns (close and volume exist in both)
+        if 'close_indicator' in df_complete.columns:
+            df_complete = df_complete.drop(columns=['close_indicator'])
+        if 'volume_indicator' in df_complete.columns:
+            df_complete = df_complete.drop(columns=['volume_indicator'])
+        
+        return df_complete
     
     def _initialize_broker(self) -> PaperFuturesBroker:
         """Initialize paper broker with risk parameters"""
