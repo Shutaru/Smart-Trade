@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { TradesTable } from './TradesTable';
 
 interface RunStatus {
   run_id: string;
@@ -265,19 +266,16 @@ Run Status
     </TabsContent>
 
  <TabsContent value="trades">
-       <Card>
-              <CardHeader>
-   <CardTitle>Trades</CardTitle>
+          <Card>
+          <CardHeader>
+              <CardTitle>Trades</CardTitle>
     <CardDescription>All executed trades during the backtest</CardDescription>
-          </CardHeader>
-     <CardContent>
-      <div className="text-center py-8 text-muted-foreground">
-           <p>Trades table will be loaded from artifacts/trades.csv</p>
-    <p className="text-sm mt-2">Coming soon...</p>
-          </div>
-    </CardContent>
-            </Card>
-  </TabsContent>
+            </CardHeader>
+       <CardContent>
+            <TradesTable runId={runId!} trialId={topTrial?.trial_id} />
+          </CardContent>
+          </Card>
+        </TabsContent>
 
           <TabsContent value="logs">
             <Card>

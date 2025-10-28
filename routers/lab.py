@@ -1,6 +1,7 @@
 """Router for Strategy Lab"""
 from fastapi import APIRouter, HTTPException
 from typing import List
+import os
 import db_sqlite
 from lab_schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
@@ -239,6 +240,71 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
         raise HTTPException(500, f"Failed to get results: {str(e)}")
 
 
+@router.get("/run/{run_id}/artifacts/trades")
+async def get_run_trades(run_id: str):
+    """Get trades from artifacts for a run"""
+    import csv
+ import glob
+    
+    # Find trades.csv in artifacts
+    pattern = os.path.join("artifacts", run_id, "*", "trades.csv")
+    trades_files = glob.glob(pattern)
+    
+    if not trades_files:
+     raise HTTPException(404, "Trades file not found")
+    
+    trades_path = trades_files[0]  # Get first match
+    
+    trades = []
+    try:
+  with open(trades_path, 'r') as f:
+         reader = csv.DictReader(f)
+            for row in reader:
+ trades.append({
+  'entry_time': row['entry_time'],
+'exit_time': row['exit_time'],
+         'side': row['side'],
+ 'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
+               'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
+  'pnl': float(row['pnl']),
+      'pnl_pct': float(row['pnl_pct'])
+    })
+    except Exception as e:
+      raise HTTPException(500, f"Error reading trades: {str(e)}")
+    
+    return {"trades": trades}
+
+
+@router.get("/run/{run_id}/artifacts/{trial_id}/trades")
+async def get_trial_trades(run_id: str, trial_id: int):
+  """Get trades from artifacts for a specific trial"""
+    import csv
+    
+    trades_path = os.path.join("artifacts", run_id, str(trial_id), "trades.csv")
+    
+    if not os.path.exists(trades_path):
+        raise HTTPException(404, "Trades file not found")
+    
+    trades = []
+    try:
+        with open(trades_path, 'r') as f:
+       reader = csv.DictReader(f)
+         for row in reader:
+          trades.append({
+ 'entry_time': row['entry_time'],
+ 'exit_time': row['exit_time'],
+     'side': row['side'],
+               'entry_price': float(row.get('entry_price', 0)) if row.get('entry_price') else None,
+           'exit_price': float(row.get('exit_price', 0)) if row.get('exit_price') else None,
+           'pnl': float(row['pnl']),
+  'pnl_pct': float(row['pnl_pct'])
+          })
+    except Exception as e:
+        raise HTTPException(500, f"Error reading trades: {str(e)}")
+    
+    return {"trades": trades}
+
+
 @router.get("/runs", response_model=List[RunStatus])
 async def list_runs(limit: int = 100):
     """List all runs"""
@@ -246,4 +312,4 @@ async def list_runs(limit: int = 100):
     runs = db_sqlite.get_all_runs(conn, limit)
     conn.close()
     
-    return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
+  return [RunStatus(run_id=run["id"], status=run["status"], progress=0.0, started_at=run.get("started_at"), completed_at=run.get("completed_at")) for run in runs]
