@@ -127,9 +127,10 @@ async def validate_strategy(config: StrategyConfig):
 
 @router.post("/backfill", response_model=BackfillResponse)
 async def backfill_data(request: BackfillRequest):
-    """Backfill OHLCV data and calculate features"""
+    """Backfill OHLCV data and calculate features - with progress logging"""
     import ccxt
     import pandas as pd
+    import time
     from lab_features import calculate_features, features_to_rows
     
     try:
@@ -143,11 +144,17 @@ async def backfill_data(request: BackfillRequest):
         for symbol in request.symbols:
             for tf in all_timeframes:
                 try:
+                    print(f"[Backfill] Starting {symbol} @ {tf}...")
+                    start_time = time.time()
+                    api_calls = 0
+                    
                     all_candles = []
                     current_since = request.since
                     
                     while current_since < request.until:
                         candles = ex.fetch_ohlcv(symbol, timeframe=tf, since=current_since, limit=1000)
+                        api_calls += 1
+                        
                         if not candles:
                             break
                         all_candles.extend(candles)
@@ -156,6 +163,9 @@ async def backfill_data(request: BackfillRequest):
                             break
                     
                     all_candles = [c for c in all_candles if request.since <= c[0] < request.until]
+                    
+                    elapsed = time.time() - start_time
+                    print(f"[Backfill] {symbol} @ {tf}: {len(all_candles)} candles in {elapsed:.1f}s ({api_calls} API calls)")
                     
                     if not all_candles:
                         results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path="N/A"))
@@ -176,8 +186,9 @@ async def backfill_data(request: BackfillRequest):
                             feature_rows = features_to_rows(features_df)
                             db_sqlite.insert_features_bulk(conn, tf, feature_rows)
                             features_inserted = len(feature_rows)
+                            print(f"[Backfill] Calculated {features_inserted} features")
                         except Exception as e:
-                            print(f"Feature calc error: {e}")
+                            print(f"[Backfill] Feature calc error: {e}")
                     
                     conn.close()
                     
@@ -186,9 +197,16 @@ async def backfill_data(request: BackfillRequest):
                     total_features += features_inserted
                 
                 except Exception as e:
+                    import traceback
+                    print(f"[Backfill] ERROR for {symbol} @ {tf}: {e}")
+                    traceback.print_exc()
                     results.append(BackfillResult(symbol=symbol, timeframe=tf, candles_inserted=0, features_inserted=0, db_path=f"Error: {e}"))
         
-        return BackfillResponse(success=True, message=f"Backfilled {len(request.symbols)} symbols", results=results, total_candles=total_candles, total_features=total_features)
+        success_count = sum(1 for r in results if r.candles_inserted > 0)
+        message = f"Backfilled {success_count}/{len(results)} combinations"
+        print(f"[Backfill] Complete: {total_candles} candles, {total_features} features")
+        
+        return BackfillResponse(success=True, message=message, results=results, total_candles=total_candles, total_features=total_features)
     
     except Exception as e:
         raise HTTPException(500, f"Backfill error: {str(e)}")
@@ -262,14 +280,14 @@ async def get_run_results_endpoint(run_id: str, limit: int = 100, offset: int = 
     from lab_runner import get_run_results
     
     try:
-        # get_run_results já retorna dicts parsed
+        # get_run_results jï¿½ retorna dicts parsed
         results = get_run_results(run_id, limit, offset)
         
         # Criar TrialResult objects diretamente dos results
         trials = []
         for r in results:
             try:
-                # Remove _stats from metrics (nested dict não é compatível com Pydantic)
+                # Remove _stats from metrics (nested dict nï¿½o ï¿½ compatï¿½vel com Pydantic)
                 metrics = r['metrics'].copy()
                 if '_stats' in metrics:
                     del metrics['_stats']
@@ -322,7 +340,7 @@ async def get_run_candles(run_id: str):
     db_path = db_sqlite.get_db_path(exchange, symbol, timeframe)
     
     if not os.path.exists(db_path):
-        # Return mock data se DB não existe
+        # Return mock data se DB nï¿½o existe
         import time
         now = int(time.time())
         mock_candles = []
