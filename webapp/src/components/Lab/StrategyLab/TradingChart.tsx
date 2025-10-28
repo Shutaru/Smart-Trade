@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createChart, IChartApi, CandlestickData, LineData, Time } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, Time, CandlestickData, LineData } from 'lightweight-charts';
+import { createChart } from 'lightweight-charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 
@@ -10,7 +11,7 @@ interface TradingChartProps {
 
 interface Trade {
   entry_time: string;
-  exit_time: string;
+  exit_time: string | null;
   side: 'long' | 'short';
   entry_price?: number;
   exit_price?: number;
@@ -18,12 +19,17 @@ interface Trade {
   pnl_pct: number;
 }
 
+type MarkerPosition = 'belowBar' | 'aboveBar';
+type MarkerShape = 'arrowUp' | 'arrowDown' | 'circle';
+
 export function TradingChart({ runId }: TradingChartProps) {
-  const equityChartRef = useRef<HTMLDivElement>(null);
-  const candleChartRef = useRef<HTMLDivElement>(null);
+  const equityChartRef = useRef<HTMLDivElement | null>(null);
+  const candleChartRef = useRef<HTMLDivElement | null>(null);
   const equityChartInstance = useRef<IChartApi | null>(null);
   const candleChartInstance = useRef<IChartApi | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const equitySeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const ddSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   // Fetch candles
   const { data: candlesData, isLoading: candlesLoading, error: candlesError } = useQuery({
@@ -46,7 +52,7 @@ export function TradingChart({ runId }: TradingChartProps) {
       const data = await res.json();
       console.log('[TradingChart] Equity data:', data);
       return data;
-  }
+    }
   });
 
   // Fetch trades for markers
@@ -56,70 +62,51 @@ export function TradingChart({ runId }: TradingChartProps) {
       const res = await fetch(`/api/lab/run/${runId}/artifacts/trades`);
       if (!res.ok) throw new Error('Failed to fetch trades');
       const data = await res.json();
- console.log('[TradingChart] Trades data:', data);
-   return data;
+      console.log('[TradingChart] Trades data:', data);
+      return data;
     }
   });
 
+  // Helper: Convert timestamp to seconds
+  const toSeconds = (t: number): number => {
+    return t > 2e10 ? Math.floor(t / 1000) : t;
+  };
+
+  // Initialize charts once
   useEffect(() => {
-    if (!equityChartRef.current || !candleChartRef.current || isInitialized) return;
-    if (candlesLoading || equityLoading) return;
-    if (!candlesData?.candles || !equityData?.equity) {
-      console.log('[TradingChart] Missing data:', { 
-      hasCandlesRef: !!equityChartRef.current,
-        hasCandleRef: !!candleChartRef.current,
-        candlesData: candlesData?.candles?.length,
-      equityData: equityData?.equity?.length 
-      });
-      return;
-    }
+    if (!equityChartRef.current || !candleChartRef.current) return;
+    if (equityChartInstance.current || candleChartInstance.current) return;
 
-    console.log('[TradingChart] Initializing charts...');
+    console.log('[TradingChart] Creating chart instances...');
 
-    // Helper: Convert timestamp to seconds (lightweight-charts v3 expects seconds)
-    const toSeconds = (t: number): number => {
-  // If timestamp is in milliseconds (> 2e10), convert to seconds
-      return t > 2e10 ? Math.floor(t / 1000) : t;
-    };
-
-// Create Equity Chart
+    // Create Equity Chart
     const equityChart = createChart(equityChartRef.current, {
       width: equityChartRef.current.clientWidth,
-    height: 250,
+      height: 250,
       layout: {
-  background: { color: 'transparent' },
+        background: { color: 'transparent' },
         textColor: '#d1d5db',
       },
       grid: {
-      vertLines: { color: '#374151' },
+        vertLines: { color: '#374151' },
         horzLines: { color: '#374151' },
       },
-  rightPriceScale: {
+      rightPriceScale: {
         borderColor: '#374151',
       },
-   timeScale: {
+      timeScale: {
         borderColor: '#374151',
         timeVisible: true,
-    },
+      },
     });
 
-    const equityLine = equityChart.addLineSeries({
+    equitySeriesRef.current = equityChart.addLineSeries({
       color: '#10b981',
-   lineWidth: 2,
+      lineWidth: 2,
       title: 'Equity',
     });
 
-    // Convert timestamps to seconds
-    const equityLineData: LineData[] = equityData.equity.map((e: any) => ({
-      time: toSeconds(e.time) as Time,
-      value: e.equity,
-    }));
-
-    console.log('[TradingChart] Equity data sample:', equityLineData.slice(0, 3));
-    equityLine.setData(equityLineData);
-
-    // Add drawdown as area series
- const ddArea = equityChart.addAreaSeries({
+    ddSeriesRef.current = equityChart.addAreaSeries({
       topColor: 'rgba(239, 68, 68, 0.4)',
       bottomColor: 'rgba(239, 68, 68, 0.0)',
       lineColor: 'rgba(239, 68, 68, 0.8)',
@@ -127,36 +114,30 @@ export function TradingChart({ runId }: TradingChartProps) {
       title: 'Drawdown',
     });
 
-    const ddData: LineData[] = equityData.equity.map((e: any) => ({
-      time: toSeconds(e.time) as Time,
-      value: e.drawdown || 0,
-    }));
-
-    ddArea.setData(ddData);
     equityChartInstance.current = equityChart;
 
     // Create Candlestick Chart
     const candleChart = createChart(candleChartRef.current, {
-   width: candleChartRef.current.clientWidth,
+      width: candleChartRef.current.clientWidth,
       height: 400,
       layout: {
         background: { color: 'transparent' },
         textColor: '#d1d5db',
       },
-    grid: {
+      grid: {
         vertLines: { color: '#374151' },
-   horzLines: { color: '#374151' },
- },
+        horzLines: { color: '#374151' },
+      },
       rightPriceScale: {
         borderColor: '#374151',
       },
-    timeScale: {
-    borderColor: '#374151',
-     timeVisible: true,
-    },
+      timeScale: {
+        borderColor: '#374151',
+        timeVisible: true,
+      },
     });
 
-    const candleSeries = candleChart.addCandlestickSeries({
+    candleSeriesRef.current = candleChart.addCandlestickSeries({
       upColor: '#10b981',
       downColor: '#ef4444',
       borderUpColor: '#10b981',
@@ -165,87 +146,126 @@ export function TradingChart({ runId }: TradingChartProps) {
       wickDownColor: '#ef4444',
     });
 
-  // Convert timestamps to seconds
-    const candleSeriesData: CandlestickData[] = candlesData.candles.map((c: any) => ({
-      time: toSeconds(c.time) as Time,
-      open: c.open,
-   high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
-
-    console.log('[TradingChart] Candles data sample:', candleSeriesData.slice(0, 3));
-    candleSeries.setData(candleSeriesData);
-
-    // Add trade markers
-    if (tradesData?.trades && tradesData.trades.length > 0) {
- try {
-        const markers = tradesData.trades.flatMap((trade: Trade) => {
-          const entryTime = Math.floor(new Date(trade.entry_time).getTime() / 1000);
-          const exitTime = Math.floor(new Date(trade.exit_time).getTime() / 1000);
-   const isWin = trade.pnl > 0;
-
-          const entryMarker = {
-        time: entryTime as Time,
-       position: (trade.side === 'long' ? 'belowBar' : 'aboveBar') as 'belowBar' | 'aboveBar',
-            color: trade.side === 'long' ? '#10b981' : '#ef4444',
-            shape: (trade.side === 'long' ? 'arrowUp' : 'arrowDown') as 'arrowUp' | 'arrowDown',
-    text: `Entry ${trade.side.toUpperCase()}`,
-    };
-
-      const exitMarker = {
-            time: exitTime as Time,
-    position: (trade.side === 'long' ? 'aboveBar' : 'belowBar') as 'belowBar' | 'aboveBar',
-      color: isWin ? '#10b981' : '#ef4444',
-       shape: 'circle' as 'circle',
- text: `Exit ${isWin ? '+' : ''}${trade.pnl.toFixed(2)}`,
-          };
-
-          return [entryMarker, exitMarker];
-        });
-
-        console.log('[TradingChart] Adding', markers.length, 'markers');
-        candleSeries.setMarkers(markers);
-      } catch (err) {
-        console.error('[TradingChart] Error adding markers:', err);
-      }
-    }
-
     candleChartInstance.current = candleChart;
 
     // Sync time scales
-    const syncCharts = (targetChart: IChartApi, sourceChart: IChartApi) => {
-      targetChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+    equityChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (range) {
-  sourceChart.timeScale().setVisibleLogicalRange(range);
-        }
-      });
-    };
+        candleChart.timeScale().setVisibleLogicalRange(range);
+      }
+    });
 
-    syncCharts(equityChart, candleChart);
-    syncCharts(candleChart, equityChart);
-
-    setIsInitialized(true);
-    console.log('[TradingChart] Charts initialized successfully');
+    candleChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (range) {
+        equityChart.timeScale().setVisibleLogicalRange(range);
+      }
+    });
 
     // Handle resize
     const handleResize = () => {
-      if (equityChartRef.current && equityChart) {
- equityChart.applyOptions({ width: equityChartRef.current.clientWidth });
+      if (equityChartRef.current) {
+        equityChart.applyOptions({ width: equityChartRef.current.clientWidth });
       }
-   if (candleChartRef.current && candleChart) {
-    candleChart.applyOptions({ width: candleChartRef.current.clientWidth });
+      if (candleChartRef.current) {
+        candleChart.applyOptions({ width: candleChartRef.current.clientWidth });
       }
     };
 
     window.addEventListener('resize', handleResize);
 
+    console.log('[TradingChart] Chart instances created');
+
     return () => {
       window.removeEventListener('resize', handleResize);
       equityChart.remove();
       candleChart.remove();
+      equityChartInstance.current = null;
+      candleChartInstance.current = null;
+      equitySeriesRef.current = null;
+      ddSeriesRef.current = null;
+      candleSeriesRef.current = null;
     };
-  }, [candlesData, equityData, tradesData, isInitialized, candlesLoading, equityLoading, runId]);
+  }, []);
+
+  // Update equity data
+  useEffect(() => {
+    if (!equitySeriesRef.current || !ddSeriesRef.current || !equityData?.equity) return;
+
+    console.log('[TradingChart] Updating equity data...');
+
+    const equityLineData: LineData[] = equityData.equity.map((e: any) => ({
+      time: toSeconds(e.time) as Time,
+      value: e.equity,
+    }));
+
+    const ddData: LineData[] = equityData.equity.map((e: any) => ({
+      time: toSeconds(e.time) as Time,
+      value: e.drawdown || 0,
+    }));
+
+    console.log('[TradingChart] Equity sample:', equityLineData.slice(0, 3));
+
+    equitySeriesRef.current.setData(equityLineData);
+    ddSeriesRef.current.setData(ddData);
+  }, [equityData]);
+
+  // Update candle data and markers
+  useEffect(() => {
+    if (!candleSeriesRef.current || !candlesData?.candles) return;
+
+    console.log('[TradingChart] Updating candle data...');
+
+    const candleSeriesData: CandlestickData[] = candlesData.candles.map((c: any) => ({
+      time: toSeconds(c.time) as Time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }));
+
+    console.log('[TradingChart] Candles sample:', candleSeriesData.slice(0, 3));
+
+    candleSeriesRef.current.setData(candleSeriesData);
+
+    // Add trade markers
+    if (tradesData?.trades && tradesData.trades.length > 0) {
+      try {
+        const markers = tradesData.trades
+          .filter((trade: Trade) => trade.exit_time) // Only completed trades
+          .flatMap((trade: Trade) => {
+            const entryTime = Math.floor(new Date(trade.entry_time).getTime() / 1000);
+            const exitTime = Math.floor(new Date(trade.exit_time!).getTime() / 1000);
+            const isWin = trade.pnl > 0;
+
+            const entryPosition: MarkerPosition = trade.side === 'long' ? 'belowBar' : 'aboveBar';
+            const entryShape: MarkerShape = trade.side === 'long' ? 'arrowUp' : 'arrowDown';
+            const exitPosition: MarkerPosition = trade.side === 'long' ? 'aboveBar' : 'belowBar';
+
+            return [
+              {
+                time: entryTime as Time,
+                position: entryPosition,
+                color: trade.side === 'long' ? '#10b981' : '#ef4444',
+                shape: entryShape,
+                text: `Entry ${trade.side.toUpperCase()}`,
+              },
+              {
+                time: exitTime as Time,
+                position: exitPosition,
+                color: isWin ? '#10b981' : '#ef4444',
+                shape: 'circle' as MarkerShape,
+                text: `${isWin ? '+' : ''}${trade.pnl.toFixed(2)}`,
+              },
+            ];
+          });
+
+        console.log('[TradingChart] Adding', markers.length, 'markers');
+        candleSeriesRef.current.setMarkers(markers);
+      } catch (err) {
+        console.error('[TradingChart] Error adding markers:', err);
+      }
+    }
+  }, [candlesData, tradesData]);
 
   if (candlesLoading || equityLoading) {
     return (
@@ -258,7 +278,7 @@ export function TradingChart({ runId }: TradingChartProps) {
   if (candlesError || equityError) {
     return (
       <div className="text-center py-8 text-destructive">
-      <p>Error loading chart data</p>
+        <p>Error loading chart data</p>
         <p className="text-sm mt-2">{(candlesError || equityError)?.toString()}</p>
       </div>
     );
@@ -267,9 +287,9 @@ export function TradingChart({ runId }: TradingChartProps) {
   if (!candlesData?.candles || !equityData?.equity) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-   <p>No chart data available</p>
+        <p>No chart data available</p>
         <p className="text-sm mt-2">
-       Candles: {candlesData?.candles?.length || 0} | Equity: {equityData?.equity?.length || 0}
+          Candles: {candlesData?.candles?.length || 0} | Equity: {equityData?.equity?.length || 0}
         </p>
       </div>
     );
@@ -281,24 +301,24 @@ export function TradingChart({ runId }: TradingChartProps) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Equity Curve</CardTitle>
           <CardDescription>Cumulative P&L over time ({equityData.equity.length} points)</CardDescription>
-  </CardHeader>
+        </CardHeader>
         <CardContent className="p-0">
-    <div ref={equityChartRef} />
-    </CardContent>
+          <div ref={equityChartRef} className="w-full" />
+        </CardContent>
       </Card>
 
-    <Card>
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Price Action & Trades</CardTitle>
-<CardDescription>
-      {candlesData.symbol} • {candlesData.timeframe} • 
+          <CardDescription>
+            {candlesData.symbol} • {candlesData.timeframe} •
             <span className="text-green-500 ml-2">? Entry</span>
-         <span className="text-red-500 ml-2">? Entry</span>
-        <span className="ml-2">? Exit</span>
-      </CardDescription>
-</CardHeader>
+            <span className="text-red-500 ml-2">? Entry</span>
+            <span className="ml-2">? Exit</span>
+          </CardDescription>
+        </CardHeader>
         <CardContent className="p-0">
-          <div ref={candleChartRef} />
+          <div ref={candleChartRef} className="w-full" />
         </CardContent>
       </Card>
     </div>
