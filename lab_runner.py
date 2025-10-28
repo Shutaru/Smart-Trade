@@ -129,123 +129,70 @@ def log_run(run_id: str, level: str, message: str, progress: float = None, best_
 
 
 def execute_backtest_task(run_id: str, config: StrategyConfig):
-    """Execute backtest task - simplified version with real data loading"""
+    """Execute REAL backtest task using production engine"""
     conn = db_sqlite.connect_lab()
     
     try:
         db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
         log_run(run_id, "INFO", f"Starting backtest for strategy: {config.name}", progress=0.0)
-        
+  
         log_run(run_id, "INFO", "Loading historical data...", progress=0.1)
-      
-        # TODO: Implement real backtest using backtest.py logic
-        # For now, generate realistic mock metrics based on config
-      
-        import random
-        random.seed(hash(config.name) % 2**32)  # Deterministic but different per strategy
+   
+        # Create trial first to get artifact directory
+        trial_id = db_sqlite.insert_trial(conn, run_id=run_id, trial_number=1, params={}, metrics={}, score=0.0)
+        artifact_dir = get_artifact_dir(run_id, trial_id)
+   
+  log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
+ 
+    # ? RUN REAL BACKTEST using production adapter
+     from lab_backtest_adapter import run_strategy_lab_backtest
         
-        log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
-        time.sleep(0.3)
-    
         log_run(run_id, "INFO", "Simulating trades...", progress=0.5)
-        time.sleep(0.3)
         
-        log_run(run_id, "INFO", "Computing metrics...", progress=0.7)
-        time.sleep(0.3)
+        metrics = run_strategy_lab_backtest(config, artifact_dir)
         
-        # Generate realistic metrics (varies by strategy name/config)
-        base_profit = random.uniform(20.0, 80.0)
-        base_sharpe = random.uniform(1.5, 3.5)
-        
-        metrics = {
- 'total_profit': round(base_profit, 2),
-'sharpe': round(base_sharpe, 2),
- 'sortino': round(base_sharpe * 1.2, 2),
-      'calmar': round(base_sharpe * 0.9, 2),
-         'max_dd': round(random.uniform(-25.0, -10.0), 2),
-   'win_rate': round(random.uniform(45.0, 65.0), 2),
-      'profit_factor': round(random.uniform(1.5, 3.5), 2),
-            'avg_trade': round(random.uniform(0.5, 2.5), 2),
-       'trades': int(random.uniform(80, 200)),
-       'exposure': round(random.uniform(50.0, 80.0), 2),
-          'pnl_std': round(random.uniform(1.5, 3.5), 2)
-        }
-        
+  log_run(run_id, "INFO", "Computing metrics...", progress=0.7)
+   
+        # Evaluate objective
         try:
-            score = evaluate_objective(metrics, config.objective.expression)
+      score = evaluate_objective(metrics, config.objective.expression)
             log_run(run_id, "INFO", f"Objective score: {score:.4f}", progress=0.85, best_score=score)
         except Exception as e:
             log_run(run_id, "ERROR", f"Failed to evaluate objective: {str(e)}", progress=0.85)
-            score = 0.0
-        
-        trial_id = db_sqlite.insert_trial(conn, run_id=run_id, trial_number=1, params={}, metrics=metrics, score=score)
-        
-        artifact_dir = get_artifact_dir(run_id, trial_id)
-        log_run(run_id, "INFO", "Saving artifacts...", progress=0.9, best_score=score)
-    
-        # Create realistic trades.csv
-        trades_path = os.path.join(artifact_dir, "trades.csv")
-        with open(trades_path, 'w') as f:
-            f.write("entry_time,exit_time,side,entry_price,exit_price,pnl,pnl_pct\n")
-   num_trades = metrics['trades']
-            cumulative_pnl = 0.0
-            base_time = int(time.time()) - 30*24*3600  # 30 days ago
-
-  for i in range(min(num_trades, 50)):  # Max 50 trades in CSV
-    entry_ts = base_time + i * 3600 * 12  # Every 12 hours
-   exit_ts = entry_ts + random.randint(1800, 18000)  # 30min to 5h
-    side = random.choice(['long', 'short'])
-         entry_price = random.uniform(40000, 45000)
-    pnl = random.gauss(metrics['avg_trade'], metrics['pnl_std'])
-                pnl_pct = (pnl / entry_price) * 100
+         score = 0.0
      
-                if side == 'long':
-         exit_price = entry_price * (1 + pnl_pct/100)
-      else:
-           exit_price = entry_price * (1 - pnl_pct/100)
-         
-            cumulative_pnl += pnl
-       
-    f.write(f"{datetime.fromtimestamp(entry_ts).isoformat()},{datetime.fromtimestamp(exit_ts).isoformat()},{side},{entry_price:.2f},{exit_price:.2f},{pnl:.2f},{pnl_pct:.2f}\n")
-        
- db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
-        
-        # Create realistic equity.csv
-        equity_path = os.path.join(artifact_dir, "equity.csv")
-        with open(equity_path, 'w') as f:
-            f.write("timestamp,equity,drawdown\n")
-     cumulative = 0.0
-            max_equity = 0.0
-      
-   for i in range(min(num_trades, 50)):
-      entry_ts = base_time + i * 3600 * 12
-         trade_pnl = random.gauss(metrics['avg_trade'], metrics['pnl_std'])
-     cumulative += trade_pnl
-      max_equity = max(max_equity, cumulative)
-    dd = ((cumulative - max_equity) / max(abs(max_equity), 1)) * 100 if max_equity > 0 else 0
+        # Update trial with real metrics
+     conn.execute("UPDATE trials SET metrics_json = ?, score = ? WHERE id = ?",
+        (json.dumps(metrics), score, trial_id))
+        conn.commit()
  
-                ts_str = datetime.fromtimestamp(entry_ts).isoformat()
-        f.write(f"{ts_str},{cumulative:.2f},{dd:.2f}\n")
-      
-        db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
+        log_run(run_id, "INFO", "Saving artifacts...", progress=0.9, best_score=score)
         
-        metrics_path = os.path.join(artifact_dir, "metrics.json")
-        with open(metrics_path, 'w') as f:
-            json.dump(metrics, f, indent=2)
-        db_sqlite.insert_artifact(conn, run_id, trial_id, "metrics", metrics_path)
-    
-    db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
+        # Register artifacts in database
+ trades_path = os.path.join(artifact_dir, "trades.csv")
+        if os.path.exists(trades_path):
+  db_sqlite.insert_artifact(conn, run_id, trial_id, "trades", trades_path)
+  
+        equity_path = os.path.join(artifact_dir, "equity.csv")
+        if os.path.exists(equity_path):
+       db_sqlite.insert_artifact(conn, run_id, trial_id, "equity_curve", equity_path)
+        
+      metrics_path = os.path.join(artifact_dir, "metrics.json")
+        if os.path.exists(metrics_path):
+            db_sqlite.insert_artifact(conn, run_id, trial_id, "metrics", metrics_path)
+        
+     db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
         log_run(run_id, "INFO", f"Backtest completed successfully", progress=1.0, best_score=score)
     
     except Exception as e:
-        db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
+   db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
         error_msg = f"Backtest failed: {str(e)}\n{traceback.format_exc()}"
-    log_run(run_id, "ERROR", error_msg, progress=1.0)
-    
+        log_run(run_id, "ERROR", error_msg, progress=1.0)
+
     finally:
-      conn.close()
-     if run_id in _active_runs:
-   del _active_runs[run_id]
+        conn.close()
+        if run_id in _active_runs:
+     del _active_runs[run_id]
 
 
 def start_backtest_run(config: StrategyConfig) -> str:
