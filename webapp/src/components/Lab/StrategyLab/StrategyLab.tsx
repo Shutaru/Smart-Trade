@@ -35,7 +35,12 @@ const defaultStrategy = {
         timeframe: '5m',
         since: Date.now() - 365 * 24 * 60 * 60 * 1000,
         until: Date.now(),
-        higher_tf: ['1h', '4h']
+        higher_tf: ['1h', '4h'],
+        fees: {
+            maker: 0.02,  // 0.02% default for Bitget
+            taker: 0.06   // 0.06% default for Bitget
+        },
+        spread: 0.0  // 0 pips/points default (no spread)
     },
     risk: {
         leverage: 3,
