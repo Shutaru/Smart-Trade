@@ -73,6 +73,7 @@ class DataSpec(BaseModel):
 
 
 class RiskSpec(BaseModel):
+    starting_equity: float = Field(default=10000.0, description="Initial portfolio value in USDT")
     leverage: Union[float, tuple] = 3.0
     position_sizing: str = "fixed_usd"
     size_value: float = 1000.0

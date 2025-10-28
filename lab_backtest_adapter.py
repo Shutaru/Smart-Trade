@@ -167,16 +167,10 @@ class StrategyLabBacktestEngine:
         
         risk = self.config.risk
         
-        # Determine starting equity
-        if risk.position_sizing == "fixed_usd":
-            # Start with 20x the position size
-            equity = risk.size_value * 20
-        elif risk.position_sizing == "portfolio_pct":
-            equity = 100000.0  # Default $100k
-        else:
-            equity = 100000.0
-        
-        broker = PaperFuturesBroker(
+        # Use starting_equity from risk configuration
+        equity = risk.starting_equity
+     
+ broker = PaperFuturesBroker(
             equity=equity,
             max_daily_loss_pct=2.0,
             partial_tp_at_R=1.0,

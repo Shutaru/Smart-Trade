@@ -44,6 +44,7 @@ const defaultStrategy = {
         spread: 0.0  // 0 pips/points default (no spread)
     },
     risk: {
+        starting_equity: 10000.0,  // Initial portfolio value in USDT
         leverage: 3,
         position_sizing: 'fixed_usd',
         size_value: 1000,
