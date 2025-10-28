@@ -271,14 +271,14 @@ Run Status
 
     <TabsContent value="trades">
           <Card>
-          <CardHeader>
-              <CardTitle>Trades</CardTitle>
+      <CardHeader>
+        <CardTitle>Trades</CardTitle>
     <CardDescription>All executed trades during the backtest</CardDescription>
             </CardHeader>
        <CardContent>
-            <TradesTable runId={runId!} trialId={topTrial?.trial_id} />
+        <TradesTable runId={runId!} />
           </CardContent>
-          </Card>
+ </Card>
         </TabsContent>
 
           <TabsContent value="logs">
