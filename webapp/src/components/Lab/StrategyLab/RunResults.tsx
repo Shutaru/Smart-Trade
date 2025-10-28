@@ -239,35 +239,37 @@ Run Status
           </TabsList>
 
        <TabsContent value="metrics" className="space-y-6">
-          {topTrial && (
-     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {Object.entries(topTrial.metrics).map(([key, value]) => {
-        const isPositive = value > 0;
-       const isNegative = value < 0;
+   {topTrial && (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+       {Object.entries(topTrial.metrics).map(([key, value]) => {
+  const isPositive = value > 0;
+      const isNegative = value < 0;
 
-     return (
-      <Card key={key}>
-  <CardHeader className="pb-2">
-<CardTitle className="text-sm font-medium text-muted-foreground">
-                  {key.replace(/_/g, ' ').toUpperCase()}
-     </CardTitle>
-     </CardHeader>
-             <CardContent>
-              <div className="flex items-center gap-2">
-   <span className="text-2xl font-bold">{formatMetricValue(value)}</span>
-               {isPositive && <TrendingUp className="h-4 w-4 text-green-500" />}
-         {isNegative && <TrendingDown className="h-4 w-4 text-destructive" />}
-         </div>
-                </CardContent>
-      </Card>
-  );
-    })}
-      </div>
-      )}
+                return (
+       <Card key={key}>
+        <CardHeader className="pb-2">
+     <CardTitle className="text-sm font-medium text-muted-foreground">
+    {key.replace(/_/g, ' ').toUpperCase()}
+            </CardTitle>
+    </CardHeader>
+         <CardContent>
+           <div className="flex items-center gap-2">
+  <span className="text-2xl font-bold">{formatMetricValue(value)}</span>
+      {isPositive && <TrendingUp className="h-4 w-4 text-green-500" />}
+             {isNegative && <TrendingDown className="h-4 w-4 text-destructive" />}
+       </div>
+         </CardContent>
+             </Card>
+                );
+        })}
+    </div>
+   )}
 
-        {/* Trading Chart - Equity + Candlesticks */}
-        <TradingChart runId={runId!} />
-    </TabsContent>
+          {/* Trading Chart - Equity + Candlesticks with reserved space */}
+     <div className="min-h-[700px]">
+   <TradingChart runId={runId!} />
+          </div>
+  </TabsContent>
 
     <TabsContent value="trades">
           <Card>
