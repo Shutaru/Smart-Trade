@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { 
   Card, 
   CardContent, 
@@ -57,7 +58,9 @@ import {
   Download,
   Play,
   Sparkles,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { 
@@ -67,6 +70,8 @@ import {
   type EntryCondition,
   INDICATOR_CATALOG
 } from '@/domain/strategy';
+import * as LabAPI from '@/lib/api-lab';
+import { useNavigate } from 'react-router-dom';
 
 // ============================================================================
 // VALIDATION SCHEMA (Zod)
@@ -94,6 +99,7 @@ type StrategyFormValues = z.infer<typeof strategyFormSchema>;
 // ============================================================================
 
 export function StrategyLabV2() {
+  const navigate = useNavigate();
   const [strategy, setStrategy] = useState<StrategyDefinition>(createDefaultStrategy());
   const [activeTab, setActiveTab] = useState('data');
   const [isBackfilling, setIsBackfilling] = useState(false);
@@ -103,194 +109,224 @@ export function StrategyLabV2() {
   const form = useForm<StrategyFormValues>({
     resolver: zodResolver(strategyFormSchema),
     defaultValues: {
-    name: strategy.name,
+      name: strategy.name,
       exchange: strategy.exchange,
       symbols: strategy.symbols,
       baseTimeframe: strategy.baseTimeframe,
       dateFrom: strategy.dateFrom,
-      dateTo: strategy.dateTo,
-      initialEquity: strategy.risk.initialEquity,
+dateTo: strategy.dateTo,
+  initialEquity: strategy.risk.initialEquity,
       maxLeverage: strategy.risk.maxLeverage,
       maxConcurrentPositions: strategy.risk.maxConcurrentPositions
     }
   });
 
-  // Query symbols from API
-  const { data: symbolsData, isLoading: symbolsLoading } = useQuery({
-  queryKey: ['symbols', form.watch('exchange')],
-    queryFn: async () => {
-      const res = await fetch(`/api/lab/symbols?exchange=${form.watch('exchange')}`);
-      if (!res.ok) throw new Error('Failed to fetch symbols');
-      return res.json();
-    },
+  // Query symbols from API using new client
+  const { data: symbols = [], isLoading: symbolsLoading } = useQuery({
+    queryKey: ['symbols', form.watch('exchange')],
+    queryFn: () => LabAPI.getSymbols(form.watch('exchange')),
     enabled: !!form.watch('exchange')
   });
-
-  const symbols = symbolsData?.symbols || [];
 
   // Validate strategy
   const validation = validateStrategy(strategy);
 
-  // Handle backfill
+  // Handle backfill with toast feedback
   const handleBackfill = async () => {
     setIsBackfilling(true);
+    const toastId = toast.loading('Starting backfill...');
+    
     try {
-      const res = await fetch('/api/lab/backfill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          exchange: strategy.exchange,
-          symbols: strategy.symbols,
-          timeframe: strategy.baseTimeframe,
-          since: strategy.dateFrom,
-          until: strategy.dateTo,
-      higher_tf: strategy.higherTimeframes || []
-   })
+      const result = await LabAPI.backfillData({
+      exchange: strategy.exchange,
+        symbols: strategy.symbols,
+        timeframe: strategy.baseTimeframe,
+        since: strategy.dateFrom,
+ until: strategy.dateTo,
+        higher_tf: strategy.higherTimeframes || []
       });
       
-      if (!res.ok) throw new Error('Backfill failed');
-    
-      const data = await res.json();
-      alert(`? Backfilled ${data.total_candles} candles`);
+      toast.success(
+        `? Backfill complete! Downloaded ${result.total_candles.toLocaleString()} candles`,
+        { id: toastId, duration: 5000 }
+      );
+      
+      // Show detailed results
+      result.results.forEach(r => {
+        if (r.candles_inserted > 0) {
+          toast.success(
+       `${r.symbol} @ ${r.timeframe}: ${r.candles_inserted.toLocaleString()} candles`,
+ { duration: 3000 }
+        );
+        }
+  });
     } catch (error) {
-      alert(`? Backfill error: ${error}`);
-  } finally {
+      const err = error as LabAPI.ApiError;
+   toast.error(
+    `? Backfill failed: ${err.message}`,
+        { id: toastId, duration: 5000 }
+      );
+    } finally {
       setIsBackfilling(false);
     }
   };
 
-  // Handle backtest
+  // Handle backtest with navigation
   const handleBacktest = async () => {
     setIsBacktesting(true);
+    const toastId = toast.loading('Starting backtest...');
+    
     try {
-      const res = await fetch('/api/lab/run/backtest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(strategy)
-      });
+      const result = await LabAPI.runBacktest(strategy);
+    
+   toast.success(
+        `? Backtest started! Run ID: ${result.run_id.substring(0, 8)}...`,
+    { id: toastId, duration: 3000 }
+      );
       
-      if (!res.ok) throw new Error('Backtest failed');
-      
-      const data = await res.json();
-      alert(`? Backtest started! Run ID: ${data.run_id}`);
- } catch (error) {
-      alert(`? Backtest error: ${error}`);
-    } finally {
-      setIsBacktesting(false);
+      // Navigate to results page after 1 second
+      setTimeout(() => {
+        navigate(`/lab/results/${result.run_id}`);
+      }, 1000);
+    } catch (error) {
+      const err = error as LabAPI.ApiError;
+    toast.error(
+        `? Backtest failed: ${err.message}`,
+        { id: toastId, duration: 5000 }
+      );
+   setIsBacktesting(false);
     }
   };
 
   // Handle optimization
   const handleOptimize = async () => {
     setIsOptimizing(true);
-try {
-      const res = await fetch('/api/lab/run/optuna?n_trials=100', {
-      method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify(strategy)
- });
+    const toastId = toast.loading('Starting optimization...');
+    
+    try {
+      const result = await LabAPI.runOptuna(strategy, 100);
+
+      toast.success(
+        `? Optimization started! Run ID: ${result.run_id.substring(0, 8)}...`,
+        { id: toastId, duration: 3000 }
+      );
       
-      if (!res.ok) throw new Error('Optimization failed');
-      
-  const data = await res.json();
-    alert(`? Optimization started! Run ID: ${data.run_id}`);
- } catch (error) {
- alert(`? Optimization error: ${error}`);
-    } finally {
+      // Navigate to results page
+      setTimeout(() => {
+        navigate(`/lab/results/${result.run_id}`);
+    }, 1000);
+    } catch (error) {
+      const err = error as LabAPI.ApiError;
+      toast.error(
+        `? Optimization failed: ${err.message}`,
+        { id: toastId, duration: 5000 }
+      );
       setIsOptimizing(false);
     }
   };
 
-  return (
+return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+  <div className="flex items-center justify-between">
         <div>
-   <h1 className="text-3xl font-bold tracking-tight">Strategy Lab v2</h1>
-          <p className="text-muted-foreground">
-            Build, backtest, and optimize quantitative trading strategies
-          </p>
-        </div>
+     <h1 className="text-3xl font-bold tracking-tight">Strategy Lab v2</h1>
+ <p className="text-muted-foreground">
+   Build, backtest, and optimize quantitative trading strategies
+      </p>
+  </div>
         
-      <div className="flex gap-2">
-  <Button
-     variant="outline"
-    size="sm"
+        <div className="flex gap-2">
+ <Button
+ variant="outline"
+     size="sm"
       onClick={handleBackfill}
-         disabled={!validation.valid || isBackfilling}
-          >
-     {isBackfilling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      <Download className="mr-2 h-4 w-4" />
-       Backfill Data
-          </Button>
+disabled={!validation.valid || isBackfilling || strategy.symbols.length === 0}
+     >
+       {isBackfilling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   <Download className="mr-2 h-4 w-4" />
+    Backfill Data
+     </Button>
           
-   <Button
-variant="outline"
-            size="sm"
-        onClick={handleBacktest}
-disabled={!validation.valid || isBacktesting}
-          >
-  {isBacktesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        <Play className="mr-2 h-4 w-4" />
-        Run Backtest
-</Button>
-        
           <Button
- size="sm"
-         onClick={handleOptimize}
-            disabled={!validation.valid || isOptimizing}
-      >
-        {isOptimizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
- <Sparkles className="mr-2 h-4 w-4" />
-        Optimize
+            variant="outline"
+         size="sm"
+            onClick={handleBacktest}
+          disabled={!validation.valid || isBacktesting}
+ >
+            {isBacktesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Play className="mr-2 h-4 w-4" />
+ Run Backtest
           </Button>
-      </div>
+  
+          <Button
+    size="sm"
+         onClick={handleOptimize}
+    disabled={!validation.valid || isOptimizing}
+    >
+         {isOptimizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Sparkles className="mr-2 h-4 w-4" />
+            Optimize
+          </Button>
+        </div>
       </div>
 
       {/* Strategy Name */}
- <Card>
-        <CardHeader>
-          <CardTitle>Strategy Name</CardTitle>
-        <CardDescription>Give your strategy a unique identifier</CardDescription>
+      <Card>
+ <CardHeader>
+<CardTitle>Strategy Name</CardTitle>
+          <CardDescription>Give your strategy a unique identifier</CardDescription>
         </CardHeader>
-<CardContent>
+        <CardContent>
           <Form {...form}>
-   <FormField
-     control={form.control}
-         name="name"
-     render={({ field }) => (
-         <FormItem>
-            <FormControl>
-        <Input
-          {...field}
-          placeholder="My Awesome Strategy"
-              onChange={(e) => {
-      field.onChange(e);
-        setStrategy({ ...strategy, name: e.target.value });
-            }}
+          <FormField
+        control={form.control}
+              name="name"
+  render={({ field }) => (
+    <FormItem>
+   <FormControl>
+      <Input
+             {...field}
+        placeholder="My Awesome Strategy"
+        onChange={(e) => {
+         field.onChange(e);
+            setStrategy({ ...strategy, name: e.target.value });
+          }}
      />
   </FormControl>
-               <FormMessage />
-      </FormItem>
-  )}
-  />
+            <FormMessage />
+         </FormItem>
+            )}
+   />
           </Form>
         </CardContent>
       </Card>
 
       {/* Validation Status */}
-      {!validation.valid && (
-      <Card className="border-destructive">
-  <CardHeader>
-            <CardTitle className="text-destructive">Validation Errors</CardTitle>
-          </CardHeader>
-          <CardContent>
-     <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
-  {validation.errors.map((error, i) => (
-       <li key={i}>{error}</li>
-            ))}
-            </ul>
- </CardContent>
+      {validation.valid ? (
+ <Card className="border-green-500/50 bg-green-50/50 dark:bg-green-950/20">
+    <CardContent className="pt-6">
+        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+        <CheckCircle2 className="h-5 w-5" />
+   <span className="font-medium">Strategy is valid and ready to run</span>
+      </div>
+          </CardContent>
+        </Card>
+   ) : (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive flex items-center gap-2">
+    <AlertCircle className="h-5 w-5" />
+   Validation Errors
+            </CardTitle>
+   </CardHeader>
+      <CardContent>
+         <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
+              {validation.errors.map((error, i) => (
+            <li key={i}>{error}</li>
+   ))}
+     </ul>
+</CardContent>
         </Card>
       )}
 
@@ -395,8 +431,8 @@ function DataConfigSection({ strategy, setStrategy, form, symbols, symbolsLoadin
 
   const toggleSymbol = (symbol: string) => {
     const newSymbols = strategy.symbols.includes(symbol)
- ? strategy.symbols.filter(s => s !== symbol)
-    : [...strategy.symbols, symbol];
+      ? strategy.symbols.filter(s => s !== symbol)
+      : [...strategy.symbols, symbol];
     
     setStrategy({ ...strategy, symbols: newSymbols });
     form.setValue('symbols', newSymbols);
