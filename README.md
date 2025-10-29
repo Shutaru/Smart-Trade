@@ -51,11 +51,47 @@ Siga estes passos para ter a plataforma a correr localmente.
 -   Python 3.8+
 -   Node.js 18+ e npm
 
-### 1. Configuração do Backend
+### ⚡ Método Rápido: Scripts 1-Click (Windows)
+
+#### Modo Desenvolvimento (Hot Reload)
+```powershell
+# Inicia backend (FastAPI) e frontend (Vite) com hot-reload
+.\start-dev.ps1
+```
+
+**O que faz:**
+- ✅ Verifica dependências (Python venv, node_modules)
+- ✅ Instala dependências se necessário
+- ✅ Inicia backend em `http://127.0.0.1:8000` (nova janela)
+- ✅ Inicia frontend em `http://localhost:5173` (nova janela)
+- ✅ Hot-reload ativo em ambos
+
+#### Modo Produção (Build Otimizado)
+```powershell
+# Build do frontend + serve via FastAPI
+.\start-prod.ps1
+```
+
+**O que faz:**
+- ✅ Executa `npm ci` (clean install)
+- ✅ Build otimizado do frontend (`npm run build`)
+- ✅ Serve frontend + backend em `http://0.0.0.0:8000`
+- ✅ Pronto para deploy (single server)
+
+---
+
+### 📋 Método Manual: Passo a Passo
+
+#### 1. Configuração do Backend
 ```bash
 # Clone o repositório
 git clone <URL_DO_SEU_REPOSITORIO>
 cd <NOME_DA_PASTA>
+
+# Crie virtual environment (recomendado)
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
 
 # Instale as dependências Python
 pip install -r requirements.txt
@@ -72,7 +108,7 @@ uvicorn gui_server:app --reload
 ```
 O backend estará agora a correr em `http://127.0.0.1:8000`.
 
-### 2. Configuração do Frontend
+#### 2. Configuração do Frontend
 Num novo terminal:
 ```bash
 # Navegue para a pasta da aplicação web
@@ -90,8 +126,13 @@ A interface irá ligar-se automaticamente ao backend através do proxy configura
 
 ---
 
-## 🗺️ Próximos Passos do Roadmap
+## 🔧 Scripts Disponíveis
 
--   **Página de Detalhe do Bot:** Uma vista dedicada para cada bot com gráficos de performance, histórico de trades e logs.
--   **Dashboard Principal:** Um ecrã de entrada que agrega as informações mais importantes: balanço da conta, performance dos bots e alertas.
--   **Suporte Multi-Exchange:** Abstrair a lógica de conexão para facilitar a adição de outras exchanges, como a Binance.
+| Script | Descrição | Uso |
+|--------|-----------|-----|
+| `start-dev.ps1` | Dev mode com hot-reload | Desenvolvimento diário |
+| `start-prod.ps1` | Build + produção | Deploy local/servidor |
+| `webapp/npm run dev` | Só frontend | Debug frontend |
+| `uvicorn gui_server:app --reload` | Só backend | Debug backend |
+
+---
