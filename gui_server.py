@@ -412,6 +412,176 @@ def api_runs_list():
     }
 
 
+# ============================= Account Equity (Live/Paper) ==============
+
+@app.get("/api/account/equity")
+async def get_account_equity(mode: str = "paper"):
+    """
+    Get equity curve for live or paper trading account
+    
+    Args:
+        mode: 'live' or 'paper' (default: paper)
+    
+    Returns:
+      {"equity": [{"ts": 1716153600000, "equity": 10000.0}]}
+    """
+    
+    if mode not in ["live", "paper"]:
+        raise HTTPException(400, f"Invalid mode: {mode}. Must be 'live' or 'paper'")
+    
+    # Determine data directory based on mode
+    data_dir = os.path.join("data", mode)
+    equity_path = os.path.join(data_dir, "equity_curve.csv")
+    
+    # Return empty if no data
+    if not os.path.exists(equity_path):
+        return {"equity": []}
+    
+    # Read equity curve from CSV
+    import csv
+    equity_data = []
+    
+    try:
+        with open(equity_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Convert timestamp to milliseconds if in seconds
+                ts = int(row['ts'])
+                if ts < 9999999999:  # Unix seconds (10 digits)
+                    ts = ts * 1000  # Convert to milliseconds
+                
+                equity_data.append({
+                    'ts': ts,
+                    'equity': float(row['equity'])
+                })
+    
+    except Exception as e:
+        print(f"[API] Error reading equity curve: {e}")
+        return {"equity": []}
+    
+    return {"equity": equity_data}
+
+
+@app.get("/api/live/equity_curve")
+async def get_live_equity_curve():
+    """Get equity curve for live trading account"""
+    result = await get_account_equity(mode="live")
+    return {"curve": result["equity"]}
+
+
+@app.get("/api/paper/equity_curve")
+async def get_paper_equity_curve():
+    """Get equity curve for paper trading account"""
+    result = await get_account_equity(mode="paper")
+    return {"curve": result["equity"]}
+
+
+@app.get("/api/live/status")
+async def get_live_status():
+    """Get live trading account status"""
+    
+    data_dir = "data/live"
+    equity_path = os.path.join(data_dir, "equity_curve.csv")
+    trades_path = os.path.join(data_dir, "trades.csv")
+    
+    # Default values
+    status = {
+        "total_balance": 0.0,
+        "today_income": 0.0,
+        "daily_change_perc": 0.0,
+        "equity": 0.0,
+        "start_equity": 100000.0,
+        "total_trades": 0,
+        "win_rate": 0.0
+    }
+    
+    # Read equity
+    if os.path.exists(equity_path):
+        try:
+            import pandas as pd
+            df = pd.read_csv(equity_path)
+            if len(df) > 0:
+                status["equity"] = float(df.iloc[-1]['equity'])
+                status["start_equity"] = float(df.iloc[0]['equity'])
+                status["total_balance"] = status["equity"]
+   
+                # Calculate today's change (if we have data from today)
+                if len(df) > 1:
+                    prev_equity = float(df.iloc[-2]['equity'])
+                    status["today_income"] = status["equity"] - prev_equity
+                    status["daily_change_perc"] = (status["today_income"] / prev_equity) * 100
+        except Exception as e:
+            print(f"[API] Error reading live equity: {e}")
+    
+    # Read trades
+    if os.path.exists(trades_path):
+        try:
+            import pandas as pd
+            df = pd.read_csv(trades_path)
+            
+            # Count completed trades
+            completed = df[df['action'].isin(['TP_FULL', 'STOP', 'TIME_STOP', 'STOP_TRAIL', 'MANUAL_EXIT'])]
+            status["total_trades"] = len(completed)
+     
+            # Calculate win rate
+            if len(completed) > 0:
+                wins = len(completed[completed['pnl'] > 0])
+                status["win_rate"] = (wins / len(completed)) * 100
+        
+        except Exception as e:
+            print(f"[API] Error reading live trades: {e}")
+    
+    return status
+
+
+@app.get("/api/paper/status")
+async def get_paper_status():
+    """Get paper trading account status"""
+    
+    data_dir = "data/paper"
+    equity_path = os.path.join(data_dir, "equity_curve.csv")
+    trades_path = os.path.join(data_dir, "trades.csv")
+    
+    # Default values
+    status = {
+        "equity": 100000.0,
+        "start_equity": 100000.0,
+        "total_trades": 0,
+        "win_rate": 0.0
+    }
+    
+    # Read equity
+    if os.path.exists(equity_path):
+        try:
+            import pandas as pd
+            df = pd.read_csv(equity_path)
+            if len(df) > 0:
+                status["equity"] = float(df.iloc[-1]['equity'])
+                status["start_equity"] = float(df.iloc[0]['equity'])
+        except Exception as e:
+            print(f"[API] Error reading paper equity: {e}")
+    
+    # Read trades
+    if os.path.exists(trades_path):
+        try:
+            import pandas as pd
+            df = pd.read_csv(trades_path)
+    
+            # Count completed trades
+            completed = df[df['action'].isin(['TP_FULL', 'STOP', 'TIME_STOP', 'STOP_TRAIL', 'MANUAL_EXIT'])]
+            status["total_trades"] = len(completed)
+            
+            # Calculate win rate
+            if len(completed) > 0:
+                wins = len(completed[completed['pnl'] > 0])
+                status["win_rate"] = (wins / len(completed)) * 100
+        
+        except Exception as e:
+            print(f"[API] Error reading paper trades: {e}")
+    
+    return status
+
+
 # === OHLCV do DB para o gráfico (candles) ===
 @app.get("/api/candles")
 def api_candles(limit: int = 500, timeframe: str = "5m"):
