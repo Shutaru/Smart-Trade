@@ -303,7 +303,7 @@ export function TradingChart({ runId }: TradingChartProps) {
           <CardDescription>Cumulative P&L over time ({equityData.equity.length} points)</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div ref={equityChartRef} className="w-full" />
+          <div ref={equityChartRef} className="w-full min-h-[250px]" />
         </CardContent>
       </Card>
 
@@ -318,7 +318,7 @@ export function TradingChart({ runId }: TradingChartProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div ref={candleChartRef} className="w-full" />
+          <div ref={candleChartRef} className="w-full min-h-[400px]" />
         </CardContent>
       </Card>
     </div>
