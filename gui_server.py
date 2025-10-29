@@ -86,7 +86,8 @@ def api_config_read():
 
 
 @app.post("/api/config/write")
-def api_config_write(cfg: Dict[str, Any] = Body(...)):
+def api_config_write(cfg: Dict[str, Any] = Body(...)
+):
     p = safe_path("config.yaml")
     yaml.safe_dump(cfg, open(p, "w", encoding="utf-8"), sort_keys=False)
     return {"ok": True}
@@ -536,30 +537,58 @@ async def ws_lab_run(websocket: WebSocket, run_id: str):
 # === Static UI (React SPA em webapp/dist) ===
 from pathlib import Path
 
-UI_DIR = (Path(__file__).parent / "webapp" / "dist").resolve()
+DIST = Path(__file__).parent / "webapp" / "dist"
 
-if UI_DIR.exists():
-    assets_dir = UI_DIR / "assets"
+if DIST.exists():
+    assets_dir = DIST / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    print(f"[UI] Serving static assets from: {assets_dir}")
 else:
-    print(f"[UI] webapp/dist não encontrado ({UI_DIR}). Compila o front com 'npm run build' em webapp/.")
+    print(f"[UI] WARNING: webapp/dist not found at {DIST}")
+    print(f"[UI] Run 'npm run build' in webapp/ to build the frontend")
 
 
 @app.get("/", include_in_schema=False)
-def spa_index():
-    if not UI_DIR.exists():
-        raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
-    return FileResponse(str(UI_DIR / "index.html"))
+async def spa_index():
+    """Serve React SPA index.html"""
+    index_path = DIST / "index.html"
+    if not index_path.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="UI build not found; run `npm run build` in webapp/"
+        )
+    return FileResponse(str(index_path))
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
-def spa_catch_all(full_path: str):
-    if full_path.startswith("api") or full_path.startswith("ws"):
-        raise HTTPException(status_code=404, detail="Endpoint não encontrado")
-    if not UI_DIR.exists():
-        raise HTTPException(503, "UI não compilada. Vai a 'webapp' e corre 'npm run build'.")
-    return FileResponse(str(UI_DIR / "index.html"))
+async def spa_catch_all(full_path: str):
+    """
+    SPA fallback for client-side routing
+    
+    Serves index.html for all routes except:
+    - /api/* (API endpoints)
+    - /ws/* (WebSocket endpoints)
+    - /assets/* (static files, already mounted)
+    """
+    # Don't intercept API or WebSocket routes
+    if full_path.startswith("api/") or full_path.startswith("ws/"):
+        raise HTTPException(status_code=404, detail=f"Endpoint not found: /{full_path}")
+    
+    # Try to serve direct file if it exists (e.g., favicon.ico, robots.txt)
+    file_path = DIST / full_path
+    if file_path.is_file() and file_path.exists():
+        return FileResponse(str(file_path))
+    
+    # Fallback to index.html for client-side routing
+    index_path = DIST / "index.html"
+    if not index_path.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="UI build not found; run `npm run build` in webapp/"
+        )
+ 
+    return FileResponse(str(index_path))
 
 
 # Configure lab_runner with main event loop
@@ -569,10 +598,18 @@ async def startup_event():
     from lab_runner import set_main_loop
     loop = asyncio.get_event_loop()
     set_main_loop(loop)
+    
     print("[Startup] Configured lab_runner with main event loop")
-    print(f"[Startup] UI directory: {UI_DIR}")
-    print(f"[Startup] UI exists: {UI_DIR.exists()}")
-    if UI_DIR.exists():
-        print(f"[Startup] ✅ React SPA ready to serve")
+    print(f"[Startup] DIST directory: {DIST}")
+    print(f"[Startup] DIST exists: {DIST.exists()}")
+    
+    if DIST.exists():
+        index_path = DIST / "index.html"
+        if index_path.exists():
+            print(f"[Startup] ✅ React SPA ready to serve")
+            print(f"[Startup] Access at: http://localhost:8000")
+        else:
+            print(f"[Startup] ⚠️  index.html not found in dist/")
     else:
-        print(f"[Startup] ⚠️  React SPA not built - run 'npm run build' in webapp/")
+        print(f"[Startup] ⚠️  React SPA not built")
+        print(f"[Startup] Run: cd webapp && npm run build")
