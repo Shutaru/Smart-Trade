@@ -22,6 +22,117 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 from routers.lab import router as lab_router
 app.include_router(lab_router)
 
+# ============================================================================
+# AGENT CONTROL API
+# ============================================================================
+
+@app.post("/api/agent/start")
+async def start_agent(request: dict = None):
+    """
+    Start autonomous agent
+    
+    Body (optional):
+    {
+        "config_path": "configs/agent_paper.yaml",
+        "overrides": {
+            "policy": "llm",
+            "symbols": ["BTC/USDT:USDT", "ETH/USDT:USDT"]
+        }
+    }
+    
+    Returns:
+        200: {run_id, status, started_at, config}
+        409: Agent already running
+        404: Config file not found
+        500: Error starting agent
+    """
+    try:
+        config_path = request.get("config_path", "configs/agent_paper.yaml") if request else "configs/agent_paper.yaml"
+        overrides = request.get("overrides") if request else None
+        
+        result = agent_service.start(config_path, overrides)
+        return result
+    
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start agent: {str(e)}")
+
+
+@app.post("/api/agent/stop")
+async def stop_agent():
+    """
+    Stop running agent
+    
+    Returns:
+        200: {stopped: true, run_id, stopped_at, duration_seconds}
+        409: Agent not running
+    """
+    try:
+        result = agent_service.stop()
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop agent: {str(e)}")
+
+
+@app.get("/api/agent/status")
+async def get_agent_status():
+    """
+    Get agent status and metrics
+    
+    Returns:
+        200: {
+            running: bool,
+            run_id: str,
+            started_at: float,
+            uptime_seconds: float,
+            iteration: int,
+            config: {...},
+            portfolio: {equity, cash, pnl, ...},
+            positions: [...],
+            pending_orders: int,
+            risk: {kill_switch_active, drawdown, ...}
+        }
+    """
+    return agent_service.status()
+
+
+@app.get("/api/agent/logs/tail")
+async def tail_agent_logs(n: int = 200, kind: str = None):
+    """
+    Get last N events from trajectory
+    
+    Query params:
+        n: Number of events to return (default: 200)
+        kind: Filter by event kind (observation, action, fill, error)
+    
+    Returns:
+        200: [
+            {ts: unix_ms, kind: str, data: {...}},
+            ...
+        ]
+    """
+    events = agent_service.tail_logs(n, kind)
+    return {"events": events, "count": len(events)}
+
+
+@app.get("/api/agent/equity")
+async def get_agent_equity():
+    """
+    Get equity curve data
+    
+    Returns:
+        200: [
+            {ts: unix_ms, equity: float, drawdown: float},
+            ...
+        ]
+    """
+    equity_data = agent_service.get_equity_curve()
+    return {"equity": equity_data, "count": len(equity_data)}
 
 def safe_path(p: str) -> str:
     """Normaliza e impede path traversal fora do projeto"""
