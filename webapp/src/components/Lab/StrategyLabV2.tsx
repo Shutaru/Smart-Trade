@@ -754,7 +754,7 @@ function ExitsSection({ strategy, setStrategy }: ExitsSectionProps) {
             ?? LONG: {strategy.long.exits.takeProfit.length} TP, {strategy.long.exits.stopLoss.length} SL, {strategy.long.exits.trailing.length} Trailing
           </p>
           <p className="text-sm text-muted-foreground">
-            ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.TRAILING.length} Trailing
+            ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.trailing.length} Trailing
       </p>
           <Button size="sm" variant="outline">
             <Plus className="mr-2 h-4 w-4" />
