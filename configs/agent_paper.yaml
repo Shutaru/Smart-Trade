@@ -1,0 +1,34 @@
+# Agent Runner Configuration - Paper Trading Mode
+
+# Exchange settings
+exchange: bitget
+symbols:
+  - BTC/USDT:USDT
+timeframe: 5m
+base_currency: USDT
+
+# Trading mode
+paper_mode: true
+
+# Risk limits
+max_exposure_pct: 50.0
+max_leverage: 3.0
+max_drawdown_intraday_pct: 5.0
+max_concurrent_positions: 3
+require_stop_loss: false  # Relaxed for paper mode
+
+# Data settings
+data_lookback_bars: 1000
+
+# Execution
+loop_interval_secs: 2
+initial_cash: 10000.0
+
+# Fees (basis points)
+taker_fee_bps: 5.0
+maker_fee_bps: 2.0
+slippage_bps: 1.0
+
+# Paths
+runs_dir: runs
+logs_dir: logs

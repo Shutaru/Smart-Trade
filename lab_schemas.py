@@ -10,9 +10,10 @@ class ConditionOperator(str, Enum):
     GTE = ">="
     LTE = "<="
     EQ = "=="
+    NE = "!="
     BETWEEN = "between"
-    CROSSES_UP = "crosses_up"
-    CROSSES_DOWN = "crosses_down"
+    CROSSES_ABOVE = "crosses_above"
+    CROSSES_BELOW = "crosses_below"
 
 
 class ExitRuleKind(str, Enum):

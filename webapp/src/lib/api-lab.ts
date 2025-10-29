@@ -7,8 +7,6 @@
 import axios, { AxiosError } from 'axios';
 import type { 
   StrategyDefinition,
-  BacktestResult,
-  OptimizationResult,
   BacktestMetrics
 } from '@/domain/strategy';
 
@@ -141,6 +139,33 @@ export async function getIndicators(): Promise<IndicatorInfo[]> {
   try {
     const { data } = await api.get<IndicatorCatalogResponse>('/indicators');
     return data.indicators;
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+// ============================================================================
+// INDICATOR OPERATORS (DYNAMIC)
+// ============================================================================
+
+export interface IndicatorOperatorsInfo {
+  indicator_id: string;
+  indicator_name: string;
+  category: string;
+  range: {
+    min?: number;
+    max?: number;
+    bounded: boolean;
+  };
+  recommended_operators: string[];
+  typical_levels: Record<string, number>;
+  usage_hint: string;
+}
+
+export async function getIndicatorOperators(indicatorId: string): Promise<IndicatorOperatorsInfo> {
+  try {
+    const { data } = await api.get<IndicatorOperatorsInfo>(`/indicators/${indicatorId}/operators`);
+    return data;
   } catch (error) {
     return handleError(error);
   }
@@ -419,6 +444,7 @@ export default {
   
   // Indicators
   getIndicators,
+  getIndicatorOperators,
   
   // Strategy
   validateStrategy,

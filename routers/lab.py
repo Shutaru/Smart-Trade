@@ -76,6 +76,19 @@ async def get_indicators():
     return {"indicators": indicators}
 
 
+@router.get("/indicators/{indicator_id}/operators")
+async def get_indicator_operators_endpoint(indicator_id: str):
+    """Get recommended operators for a specific indicator"""
+    from lab_indicators import get_indicator_operators
+    
+    operators_info = get_indicator_operators(indicator_id)
+    
+    if not operators_info:
+        raise HTTPException(404, f"Indicator '{indicator_id}' not found")
+    
+    return operators_info
+
+
 @router.post("/strategy/validate", response_model=ValidateStrategyResponse)
 async def validate_strategy(config: StrategyConfig):
     """Validate strategy configuration"""
@@ -85,37 +98,52 @@ async def validate_strategy(config: StrategyConfig):
     features_required = set()
     
     try:
+        # Validate objective expression
         valid, msg = objective_evaluator.validate(config.objective.expression)
         if not valid:
             errors.append(f"Invalid objective: {msg}")
         
-        for cond in config.long.entry_all + config.long.entry_any:
-            indicator = get_indicator(cond.indicator)
-            if not indicator:
-                errors.append(f"Indicator '{cond.indicator}' not found")
-                continue
-            
-            if cond.timeframe not in indicator["supported_timeframes"]:
-                errors.append(f"Timeframe '{cond.timeframe}' not supported")
-            
-            features_required.add(f"{cond.indicator}_{cond.timeframe}")
-            
-            if cond.rhs_indicator:
-                features_required.add(f"{cond.rhs_indicator}_{cond.timeframe}")
+        # Validate LONG conditions (only if there are any)
+        if config.long.entry_all or config.long.entry_any:
+            for cond in config.long.entry_all + config.long.entry_any:
+                if not cond.indicator:
+                    continue  # Skip empty conditions
+                
+                indicator = get_indicator(cond.indicator)
+                if not indicator:
+                    errors.append(f"Indicator '{cond.indicator}' not found")
+                    continue
+                
+                if cond.timeframe not in indicator["supported_timeframes"]:
+                    errors.append(f"Timeframe '{cond.timeframe}' not supported for {cond.indicator}")
+                
+                features_required.add(f"{cond.indicator}_{cond.timeframe}")
+                
+                if cond.rhs_indicator:
+                    features_required.add(f"{cond.rhs_indicator}_{cond.timeframe}")
         
-        for cond in config.short.entry_all + config.short.entry_any:
-            indicator = get_indicator(cond.indicator)
-            if not indicator:
-                errors.append(f"Indicator '{cond.indicator}' not found")
-                continue
-            
-            if cond.timeframe not in indicator["supported_timeframes"]:
-                errors.append(f"Timeframe '{cond.timeframe}' not supported")
-            
-            features_required.add(f"{cond.indicator}_{cond.timeframe}")
-            
-            if cond.rhs_indicator:
-                features_required.add(f"{cond.rhs_indicator}_{cond.timeframe}")
+        # Validate SHORT conditions (only if there are any)
+        if config.short.entry_all or config.short.entry_any:
+            for cond in config.short.entry_all + config.short.entry_any:
+                if not cond.indicator:
+                    continue  # Skip empty conditions
+                
+                indicator = get_indicator(cond.indicator)
+                if not indicator:
+                    errors.append(f"Indicator '{cond.indicator}' not found")
+                    continue
+                
+                if cond.timeframe not in indicator["supported_timeframes"]:
+                    errors.append(f"Timeframe '{cond.timeframe}' not supported for {cond.indicator}")
+                
+                features_required.add(f"{cond.indicator}_{cond.timeframe}")
+                
+                if cond.rhs_indicator:
+                    features_required.add(f"{cond.rhs_indicator}_{cond.timeframe}")
+        
+        # Warning if no conditions at all
+        if not features_required:
+            errors.append("Strategy has no entry conditions defined")
         
         return ValidateStrategyResponse(
             valid=len(errors) == 0,
@@ -124,8 +152,9 @@ async def validate_strategy(config: StrategyConfig):
         )
     
     except Exception as e:
-        return ValidateStrategyResponse(valid=False, features_required=[], errors=[str(e)])
-
+        import traceback
+        traceback.print_exc()
+        return ValidateStrategyResponse(valid=False, features_required=[], errors=[f"Validation error: {str(e)}"])
 
 @router.post("/backfill", response_model=BackfillResponse)
 async def backfill_data(request: BackfillRequest):
@@ -163,6 +192,13 @@ async def backfill_data(request: BackfillRequest):
                     all_candles = []
                     current_since = request.since
                     
+                    # Debug: log date range
+                    from datetime import datetime
+                    start_date = datetime.fromtimestamp(request.since / 1000).strftime('%Y-%m-%d')
+                    end_date = datetime.fromtimestamp(request.until / 1000).strftime('%Y-%m-%d')
+                    print(f"[Backfill] Target period: {start_date} to {end_date}")
+                    print(f"[Backfill] Timeframe: {tf} ({tf_ms}ms per candle)")
+                    
                     while current_since < request.until:
                         try:
                             candles = ex.fetch_ohlcv(symbol, timeframe=tf, since=current_since, limit=1000)
@@ -170,6 +206,7 @@ async def backfill_data(request: BackfillRequest):
                             retries = 0  # Reset on success
                             
                             if not candles:
+                                print(f"[Backfill] No more candles available from exchange")
                                 break
                             
                             # Deduplicate
@@ -177,21 +214,43 @@ async def backfill_data(request: BackfillRequest):
                             if all_candles:
                                 last_ts = all_candles[-1][0]
                                 candles = [c for c in candles if c[0] > last_ts]
-                            
+                                
                                 if not candles:
+                                    print(f"[Backfill] No new candles after deduplication, advancing cursor")
                                     current_since += 1000 * tf_ms
                                     continue
                             
                             all_candles.extend(candles)
                             
-                            # Advance cursor: +1ms after last candle
+                            # Get the last candle timestamp
                             last_ts = candles[-1][0]
+                            
+                            # Debug: Show progress
+                            progress_pct = ((last_ts - request.since) / (request.until - request.since)) * 100
+                            print(f"[Backfill] Progress: {progress_pct:.1f}% ({api_calls} calls, {len(all_candles)} candles)")
+                            
+                            # Advance cursor: +1ms after last candle
                             current_since = last_ts + 1
                             
-                            if len(candles) < 1000:
+                            # Only break if we've reached request.until
+                            if last_ts >= request.until:
+                                print(f"[Backfill] Reached target timestamp")
                                 break
                             
-                            # Rate limit
+                            # If we got less than 1000 candles, check if we're close to the end
+                            candles_remaining = math.floor((request.until - last_ts) / tf_ms)
+                            
+                            if len(candles) < 1000:
+                                if candles_remaining > 1000:
+                                    # We're still far from the target but got less than 1000 candles
+                                    # This might mean we hit exchange limits, but let's try once more
+                                    print(f"[Backfill] Received {len(candles)} candles, {candles_remaining} remaining, retrying...")
+                                    time.sleep(ex.rateLimit / 1000.0 if ex.rateLimit else 0.5)
+                                else:
+                                    # We're close to the end, this is expected
+                                    print(f"[Backfill] Received {len(candles)} candles (final batch, {candles_remaining} remaining)")
+                            
+                            # Rate limit between requests
                             if ex.rateLimit:
                                 time.sleep(ex.rateLimit / 1000.0)
                         
@@ -275,6 +334,8 @@ async def backfill_data(request: BackfillRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(500, f"Backfill error: {str(e)}")
+
+
 
 
 @router.post("/run/backtest", response_model=RunResponse)

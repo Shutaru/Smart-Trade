@@ -93,7 +93,7 @@ class StrategyLabBacktestEngine:
         symbol = self.config.data.symbols[0]
         timeframe = self.config.data.timeframe
         exchange = self.config.data.exchange
-    
+        
         print(f"[Backtest] Loading {symbol} @ {timeframe} from {exchange}")
         
         # Get database path
@@ -108,7 +108,7 @@ class StrategyLabBacktestEngine:
                 f"3. Wait for confirmation\n"
                 f"4. Then run backtest again"
             )
-  
+        
         # Connect and load candles
         conn = db_sqlite.connect(db_path, timeframe)
         
@@ -128,7 +128,7 @@ class StrategyLabBacktestEngine:
                 f"{datetime.fromtimestamp(self.config.data.until/1000).strftime('%Y-%m-%d')}\n"
                 f"Try backfilling data or adjusting the date range."
             )
-     
+        
         # Convert to DataFrame
         df = pd.DataFrame(rows, columns=['ts', 'open', 'high', 'low', 'close', 'volume'])
         df['ts'] = df['ts'].astype(int)
@@ -141,7 +141,7 @@ class StrategyLabBacktestEngine:
         
         # Keep original OHLCV columns
         df_ohlcv = df[['ts', 'open', 'high', 'low', 'close', 'volume']].copy()
-  
+        
         # Calculate indicators using lab_features
         df_indicators = calculate_features(df)
         
@@ -173,7 +173,7 @@ class StrategyLabBacktestEngine:
         print(f"[Backtest] Starting with ${equity:,.2f} equity")
         
         broker = PaperFuturesBroker(
-      equity=equity,
+            equity=equity,
             max_daily_loss_pct=2.0,
             partial_tp_at_R=1.0,
             trail_atr_mult=2.0,
@@ -190,6 +190,9 @@ class StrategyLabBacktestEngine:
         """Main simulation loop - evaluate conditions and execute trades"""
         
         warmup = self.config.warmup_bars
+        
+        # Store DataFrame for crossover detection
+        self.df = df
         
         for i in range(warmup, len(df)):
             row = df.iloc[i]
@@ -213,13 +216,13 @@ class StrategyLabBacktestEngine:
             if broker.position is None:
                 self.signals_evaluated += 1
                 
-                # Evaluate LONG conditions
-                should_long = self._evaluate_side(row, self.config.long)
+                # Evaluate LONG conditions (pass current index for crossover detection)
+                should_long = self._evaluate_side(i, self.config.long)
                 if should_long:
                     self.long_signals += 1
                 
                 # Evaluate SHORT conditions
-                should_short = self._evaluate_side(row, self.config.short)
+                should_short = self._evaluate_side(i, self.config.short)
                 if should_short:
                     self.short_signals += 1
                 
@@ -231,9 +234,13 @@ class StrategyLabBacktestEngine:
                     self._open_position(broker, row, "SHORT", atr)
                     self.trades_opened += 1
     
-    def _evaluate_side(self, row: pd.Series, side: StrategySide) -> bool:
+    def _evaluate_side(self, idx: int, side: StrategySide) -> bool:
         """
         Evaluate entry conditions for LONG or SHORT side
+        
+        Args:
+            idx: Current candle index in DataFrame
+            side: Strategy side configuration (LONG or SHORT)
         
         Logic:
         - ALL conditions in entry_all must be TRUE (AND logic)
@@ -241,11 +248,14 @@ class StrategyLabBacktestEngine:
         - Returns TRUE if (entry_all is satisfied) OR (entry_any is satisfied)
         """
         
+        row = self.df.iloc[idx]
+        prev_row = self.df.iloc[idx - 1] if idx > 0 else None
+        
         # Evaluate entry_all (AND logic)
         all_satisfied = True
         if side.entry_all:
             for cond in side.entry_all:
-                if not self._evaluate_condition(row, cond):
+                if not self._evaluate_condition(row, prev_row, cond):
                     all_satisfied = False
                     break
         else:
@@ -255,14 +265,14 @@ class StrategyLabBacktestEngine:
         any_satisfied = False
         if side.entry_any:
             for cond in side.entry_any:
-                if self._evaluate_condition(row, cond):
+                if self._evaluate_condition(row, prev_row, cond):
                     any_satisfied = True
                     break
         
         # Final decision: ALL satisfied OR ANY satisfied
         return all_satisfied or any_satisfied
     
-    def _evaluate_condition(self, row: pd.Series, cond: Condition) -> bool:
+    def _evaluate_condition(self, row: pd.Series, prev_row: Optional[pd.Series], cond: Condition) -> bool:
         """Evaluate a single condition against current candle data"""
         
         # Get indicator column name
@@ -295,11 +305,39 @@ class StrategyLabBacktestEngine:
             # No RHS specified
             return False
         
+        # For crossover detection, get previous values
+        prev_lhs = None
+        prev_rhs = None
+        
+        if prev_row is not None and (cond.op == ConditionOperator.CROSSES_ABOVE or cond.op == ConditionOperator.CROSSES_BELOW):
+            if indicator_col in prev_row.index:
+                prev_lhs = prev_row[indicator_col]
+            
+            if cond.rhs is not None:
+                prev_rhs = cond.rhs  # Constant value doesn't change
+            elif cond.rhs_indicator:
+                rhs_col = self._map_indicator_to_column(cond.rhs_indicator, cond.rhs_params)
+                if rhs_col in prev_row.index:
+                    prev_rhs = prev_row[rhs_col]
+        
         # Evaluate operator
-        return self._compare(lhs_value, cond.op, rhs_value)
+        return self._compare(lhs_value, cond.op, rhs_value, prev_lhs, prev_rhs)
     
-    def _compare(self, lhs: float, op: ConditionOperator, rhs: float) -> bool:
-        """Compare two values using the specified operator"""
+    def _compare(self, lhs: float, op: ConditionOperator, rhs: float, 
+                 prev_lhs: Optional[float] = None, prev_rhs: Optional[float] = None) -> bool:
+        """
+        Compare two values using the specified operator
+        
+        Args:
+            lhs: Current left-hand side value
+            op: Comparison operator
+            rhs: Current right-hand side value
+            prev_lhs: Previous left-hand side value (for crossovers)
+            prev_rhs: Previous right-hand side value (for crossovers)
+        
+        Returns:
+            Boolean result of comparison
+        """
         
         if op == ConditionOperator.GT:
             return lhs > rhs
@@ -311,15 +349,27 @@ class StrategyLabBacktestEngine:
             return lhs <= rhs
         elif op == ConditionOperator.EQ:
             return abs(lhs - rhs) < 1e-9
+        elif op == ConditionOperator.NE:
+            return abs(lhs - rhs) >= 1e-9
         elif op == ConditionOperator.BETWEEN:
             # TODO: Implement BETWEEN logic
             return False
-        elif op == ConditionOperator.CROSSES_UP:
-            # TODO: Implement cross detection
-            return False
-        elif op == ConditionOperator.CROSSES_DOWN:
-            # TODO: Implement cross detection
-            return False
+        elif op == ConditionOperator.CROSSES_ABOVE:
+            # Crossover: prev_lhs <= prev_rhs AND lhs > rhs
+            if prev_lhs is None or prev_rhs is None:
+                return False
+            if pd.isna(prev_lhs) or pd.isna(prev_rhs):
+                return False
+            # Was below or equal, now above
+            return prev_lhs <= prev_rhs and lhs > rhs
+        elif op == ConditionOperator.CROSSES_BELOW:
+            # Crossunder: prev_lhs >= prev_rhs AND lhs < rhs
+            if prev_lhs is None or prev_rhs is None:
+                return False
+            if pd.isna(prev_lhs) or pd.isna(prev_rhs):
+                return False
+            # Was above or equal, now below
+            return prev_lhs >= prev_rhs and lhs < rhs
         else:
             return False
     
@@ -330,9 +380,20 @@ class StrategyLabBacktestEngine:
         
         # Common mappings (with defaults)
         mappings = {
+            # Oscillators
             'rsi': 'rsi_14',
             'rsi_14': 'rsi_14',
             'rsi_7': 'rsi_7',
+            'williams_r': 'williams_r',
+            'stoch': 'stoch_k',
+            'stoch_k': 'stoch_k',
+            'stoch_d': 'stoch_d',
+            'cci': 'cci_20',
+            'cci_20': 'cci_20',
+            'mfi': 'mfi_14',
+            'mfi_14': 'mfi_14',
+            
+            # Trend
             'ema': 'ema_20',
             'ema_20': 'ema_20',
             'ema_50': 'ema_50',
@@ -341,16 +402,41 @@ class StrategyLabBacktestEngine:
             'sma_20': 'sma_20',
             'sma_50': 'sma_50',
             'sma_200': 'sma_200',
+            'supertrend': 'supertrend',
+            'supertrend_direction': 'supertrend_direction',
+            
+            # Volatility
             'atr': 'atr_14',
             'atr_14': 'atr_14',
-            'adx': 'adx_14',
-            'adx_14': 'adx_14',
             'bb_upper': 'bb_upper',
             'bb_middle': 'bb_middle',
             'bb_lower': 'bb_lower',
+            'bollinger_upper': 'bb_upper',
+            'bollinger_middle': 'bb_middle',
+            'bollinger_lower': 'bb_lower',
+            'keltner_upper': 'keltner_upper',
+            'keltner_middle': 'keltner_middle',
+            'keltner_lower': 'keltner_lower',
+            'donchian_upper': 'donchian_upper',
+            'donchian_middle': 'donchian_middle',
+            'donchian_lower': 'donchian_lower',
+            
+            # Strength
+            'adx': 'adx_14',
+            'adx_14': 'adx_14',
+            
+            # Momentum
             'macd': 'macd',
             'macd_signal': 'macd_signal',
             'macd_hist': 'macd_hist',
+            'roc': 'roc_12',
+            'roc_12': 'roc_12',
+            
+            # Volume
+            'vwap': 'vwap',
+            'obv': 'obv',
+            
+            # Price
             'close': 'close',
             'open': 'open',
             'high': 'high',
@@ -442,7 +528,7 @@ class StrategyLabBacktestEngine:
     
     def _save_artifacts(self, broker: PaperFuturesBroker, metrics: Dict[str, Any]):
         """Save backtest artifacts to disk"""
-
+        
         # Save metrics.json
         metrics_path = os.path.join(self.artifact_dir, "metrics.json")
         with open(metrics_path, 'w') as f:
@@ -455,12 +541,12 @@ class StrategyLabBacktestEngine:
         if os.path.exists(equity_curve_path):
             try:
                 df = pd.read_csv(equity_curve_path)
-      
+                
                 # Validate timestamps are reasonable (Unix seconds should be 10 digits)
                 if df['ts'].max() > 9999999999:  # Year 2286 in seconds
                     # Timestamps might be in milliseconds, convert to seconds
                     df['ts'] = df['ts'] / 1000
-     
+                
                 # Calculate drawdown
                 cummax = df['equity'].cummax()
                 df['drawdown'] = ((df['equity'] - cummax) / cummax * 100).fillna(0)
@@ -474,12 +560,12 @@ class StrategyLabBacktestEngine:
                 
                 # Remove rows with invalid timestamps
                 df_output = df_output.dropna(subset=['timestamp'])
-               
+                
                 if len(df_output) > 0:
                     df_output.to_csv(equity_path, index=False)
                 else:
                     print(f"[Backtest] Warning: No valid equity data to save")
-      
+                
             except Exception as e:
                 print(f"[Backtest] Warning: Failed to process equity curve: {e}")
                 # Create minimal equity file for frontend
@@ -496,7 +582,7 @@ def run_strategy_lab_backtest(config: StrategyConfig, artifact_dir: str) -> Dict
     Main entry point for Strategy Lab backtests
     
     Args:
-  config: Strategy configuration from Strategy Lab
+        config: Strategy configuration from Strategy Lab
         artifact_dir: Directory to save results
     
     Returns:
