@@ -6,9 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CandleChart: React.FC = () => {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chart = useRef<IChartApi | undefined>(undefined);
-  const candleSeries = useRef<ISeriesApi<'Candlestick'> | undefined>(undefined);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const chart = useRef<IChartApi | null>(null);
+  const candleSeries = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const { data: initialData, isLoading } = useCandles();
 
   useEffect(() => {
@@ -46,6 +46,7 @@ const CandleChart: React.FC = () => {
     return () => {
       if (chart.current) {
         chart.current.remove();
+        chart.current = null;
       }
     };
   }, [initialData]);

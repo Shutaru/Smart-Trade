@@ -7,9 +7,9 @@ interface BotPerformanceChartProps {
 }
 
 const BotPerformanceChart: React.FC<BotPerformanceChartProps> = ({ data }) => {
-    const chartContainerRef = useRef<HTMLDivElement>(null);
-    const chart = useRef<IChartApi | undefined>(undefined);
-    const lineSeries = useRef<ISeriesApi<'Line'> | undefined>(undefined);
+    const chartContainerRef = useRef<HTMLDivElement | null>(null);
+    const chart = useRef<IChartApi | null>(null);
+    const lineSeries = useRef<ISeriesApi<'Line'> | null>(null);
 
     useEffect(() => {
         if (chartContainerRef.current && data.length > 0) {
@@ -26,7 +26,12 @@ const BotPerformanceChart: React.FC<BotPerformanceChartProps> = ({ data }) => {
             chart.current.timeScale().fitContent();
         }
 
-        return () => chart.current?.remove();
+        return () => {
+            if (chart.current) {
+                chart.current.remove();
+                chart.current = null;
+            }
+        };
     }, [data]);
 
     return (
