@@ -7,6 +7,7 @@ import yaml
 import asyncio
 import subprocess
 from typing import Dict, Any, Optional
+from backend.agents.service import agent_service
 
 import websockets
 from fastapi import FastAPI, HTTPException, Body, WebSocket, WebSocketDisconnect

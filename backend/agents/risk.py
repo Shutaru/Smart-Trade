@@ -1,66 +1,352 @@
-"""
-Risk management and validation
+﻿"""
+Risk Guard - Comprehensive risk management and kill-switch
+
+Features:
+- Exposure limits (per symbol and total)
+- Position limits (max concurrent positions)
+- Leverage validation
+- Stop-loss requirements
+- Intraday drawdown kill-switch
+- Action patching (reduce qty to fit limits)
 """
 
-from typing import Tuple, List
-from .schemas import Action, PortfolioState, Order
+from typing import Tuple, Optional, Dict
+from dataclasses import dataclass
+import time
+
+from .schemas import Action, ActionIntent, ActionOrder, PortfolioState, OrderSide
 from .config import AgentConfig
 
 
+@dataclass
+class RiskLimits:
+    """Risk limits configuration"""
+    max_exposure_per_symbol_pct: float  # % of equity per symbol
+    max_total_exposure_pct: float  # % of equity total
+    max_positions: int  # Max concurrent positions
+    max_leverage: float  # Max leverage allowed
+    require_stop_loss: bool  # Require SL for positions > threshold
+    stop_loss_threshold_usd: float  # Min position size requiring SL
+    max_drawdown_intraday_pct: float  # Kill-switch threshold
+    max_order_size_pct: float  # Max single order as % of equity
+
+
+@dataclass
+class RiskState:
+    """Current risk state"""
+    kill_switch_active: bool = False
+    kill_switch_reason: str = ""
+    kill_switch_triggered_at: Optional[int] = None
+    session_start_equity: float = 0.0
+    session_high_equity: float = 0.0
+    current_drawdown_pct: float = 0.0
+    violations_count: int = 0
+
+
 class RiskGuard:
-    """Validates actions against risk limits"""
+    """
+    Comprehensive risk management system
+    
+    Validates:
+    - Exposure limits (per symbol and total)
+    - Position count limits
+    - Leverage limits
+    - Stop-loss requirements
+    - Order size limits
+    - Intraday drawdown (kill-switch)
+    
+    Can patch actions to fit within limits
+    """
     
     def __init__(self, config: AgentConfig):
-     self.config = config
+        self.config = config
+        
+        # Risk limits
+        self.limits = RiskLimits(
+            max_exposure_per_symbol_pct=config.max_exposure_pct,
+            max_total_exposure_pct=95.0,  # Total portfolio exposure
+            max_positions=config.max_concurrent_positions,
+            max_leverage=config.max_leverage,
+            require_stop_loss=config.require_stop_loss,
+            stop_loss_threshold_usd=1000.0,  # Require SL for positions > $1000
+            max_drawdown_intraday_pct=config.max_drawdown_intraday_pct,
+            max_order_size_pct=50.0  # Max single order = 50% of equity
+        )
+        
+        # Risk state
+        self.state = RiskState(
+            session_start_equity=config.initial_cash,
+            session_high_equity=config.initial_cash
+        )
+        
+        print(f"[RiskGuard] Initialized with limits:")
+        print(f"  - Max exposure per symbol: {self.limits.max_exposure_per_symbol_pct:.1f}%")
+        print(f"  - Max total exposure: {self.limits.max_total_exposure_pct:.1f}%")
+        print(f"  - Max positions: {self.limits.max_positions}")
+        print(f"  - Max leverage: {self.limits.max_leverage:.1f}x")
+        print(f"  - Kill-switch DD: {self.limits.max_drawdown_intraday_pct:.1f}%")
     
-    def validate_action(self, action: Action, portfolio: PortfolioState) -> Tuple[bool, str]:
+    def validate_action(self, action: Action, portfolio: PortfolioState) -> Tuple[bool, str, Optional[Action]]:
         """
         Validate action against risk limits
         
+        Args:
+            action: Proposed action from policy
+            portfolio: Current portfolio state
+        
         Returns:
-  (is_valid, error_message)
+            Tuple of (is_valid, reason, patched_action)
+            - is_valid: True if action passes all checks
+            - reason: Explanation of validation result
+            - patched_action: Modified action to fit limits (or None if rejected)
         """
         
-      # Check number of concurrent positions
-     if len(portfolio.positions) >= self.config.max_concurrent_positions:
-            return False, f"Maximum {self.config.max_concurrent_positions} concurrent positions reached"
-     
+        # Update risk state
+        self._update_risk_state(portfolio)
+        
+        # Check kill-switch first
+        if self.state.kill_switch_active:
+            # Only allow closing orders when kill-switch active
+            if action.intent in [ActionIntent.CLOSE_LONG, ActionIntent.CLOSE_SHORT, ActionIntent.SCALE_OUT]:
+                return True, "Kill-switch active: allowing close order", action
+            else:
+                return False, f"Kill-switch active: {self.state.kill_switch_reason}", None
+        
+        # HOLD intent - always allowed
+        if action.intent == ActionIntent.HOLD or not action.orders:
+            return True, "No orders to validate", action
+        
         # Validate each order
+        patched_orders = []
+        rejection_reasons = []
+        
         for order in action.orders:
-     # Check if adding position exceeds limits
- if order.side == "BUY":
-    is_valid, msg = self._validate_new_position(order, portfolio)
-                if not is_valid:
-             return False, msg
+            is_valid, reason, patched_order = self._validate_order(order, portfolio, action.intent)
             
-        # Require SL/TP in live mode
-         if not self.config.paper_mode and self.config.require_stop_loss:
-  # Check if order creates position without SL
-             existing_pos = next((p for p in portfolio.positions if p.symbol == order.symbol), None)
-        if not existing_pos or not existing_pos.stop_loss:
-            return False, f"Stop loss required for {order.symbol}"
+            if patched_order:
+                patched_orders.append(patched_order)
+            elif not is_valid:
+                rejection_reasons.append(f"{order.symbol}: {reason}")
         
-        return True, "OK"
+        # If all orders rejected
+        if not patched_orders and rejection_reasons:
+            self.state.violations_count += 1
+            return False, "; ".join(rejection_reasons), None
+        
+        # If some orders patched
+        if patched_orders and len(patched_orders) < len(action.orders):
+            patched_action = Action(
+                timestamp=action.timestamp,
+                intent=action.intent,
+                orders=patched_orders,
+                notes=f"PATCHED: {action.notes}. Rejected: {'; '.join(rejection_reasons)}",
+                confidence=action.confidence * 0.8  # Reduce confidence for patched actions
+            )
+            return True, f"Action patched: {len(patched_orders)}/{len(action.orders)} orders allowed", patched_action
+        
+        # All orders valid
+        return True, "All checks passed", action
     
-    def _validate_new_position(self, order: Order, portfolio: PortfolioState) -> Tuple[bool, str]:
-        """Validate new position doesn't exceed exposure limits"""
+    def _validate_order(self, order: ActionOrder, portfolio: PortfolioState, 
+                       intent: ActionIntent) -> Tuple[bool, str, Optional[ActionOrder]]:
+        """
+        Validate single order and potentially patch it
         
-        # Calculate position notional value
-      notional = order.quantity * (order.price or 0.0)
+        Returns:
+            Tuple of (is_valid, reason, patched_order)
+        """
         
-        # Check against max exposure
-    max_notional = portfolio.equity * (self.config.max_exposure_pct / 100.0)
-        if notional > max_notional:
-     return False, f"Position notional ${notional:.2f} exceeds max ${max_notional:.2f}"
+        # Get current price (estimate from portfolio if available)
+        current_price = self._estimate_price(order.symbol, portfolio)
+        if current_price is None:
+            return False, "Cannot determine current price", None
         
-    return True, "OK"
+        # Calculate order notional
+        notional = order.quantity * current_price
+        
+        # 1. Check max order size
+        max_order_notional = portfolio.equity * (self.limits.max_order_size_pct / 100)
+        if notional > max_order_notional:
+            # Try to patch: reduce quantity
+            max_qty = max_order_notional / current_price
+            if max_qty > 0:
+                patched_order = ActionOrder(
+                    symbol=order.symbol,
+                    side=order.side,
+                    type=order.type,
+                    quantity=max_qty,
+                    price=order.price,
+                    stop_price=order.stop_price,
+                    take_profit=order.take_profit,
+                    stop_loss=order.stop_loss
+                )
+                return True, f"Order size reduced from {order.quantity:.6f} to {max_qty:.6f}", patched_order
+            else:
+                return False, f"Order too large: ${notional:.2f} > max ${max_order_notional:.2f}", None
+        
+        # 2. Check position count limit (for opening orders)
+        if intent in [ActionIntent.OPEN_LONG, ActionIntent.OPEN_SHORT, ActionIntent.SCALE_IN]:
+            current_positions = len(portfolio.positions)
+            has_position = any(pos.symbol == order.symbol for pos in portfolio.positions)
+            
+            if not has_position and current_positions >= self.limits.max_positions:
+                return False, f"Max positions limit reached ({self.limits.max_positions})", None
+        
+        # 3. Check exposure limits (for opening orders)
+        if intent in [ActionIntent.OPEN_LONG, ActionIntent.OPEN_SHORT, ActionIntent.SCALE_IN]:
+            # Per-symbol exposure
+            symbol_exposure = sum(
+                pos.quantity * pos.current_price 
+                for pos in portfolio.positions 
+                if pos.symbol == order.symbol
+            )
+            new_symbol_exposure = symbol_exposure + notional
+            max_symbol_exposure = portfolio.equity * (self.limits.max_exposure_per_symbol_pct / 100)
+            
+            if new_symbol_exposure > max_symbol_exposure:
+                # Try to patch: reduce quantity to fit
+                available_exposure = max_symbol_exposure - symbol_exposure
+                if available_exposure > 0:
+                    max_qty = available_exposure / current_price
+                    patched_order = ActionOrder(
+                        symbol=order.symbol,
+                        side=order.side,
+                        type=order.type,
+                        quantity=max_qty,
+                        price=order.price,
+                        stop_price=order.stop_price,
+                        take_profit=order.take_profit,
+                        stop_loss=order.stop_loss
+                    )
+                    return True, f"Qty reduced to fit symbol exposure limit", patched_order
+                else:
+                    return False, f"Symbol exposure limit reached: {self.limits.max_exposure_per_symbol_pct}%", None
+            
+            # Total portfolio exposure
+            total_exposure = portfolio.exposure
+            new_total_exposure = total_exposure + notional
+            max_total_exposure = portfolio.equity * (self.limits.max_total_exposure_pct / 100)
+            
+            if new_total_exposure > max_total_exposure:
+                # Try to patch
+                available_exposure = max_total_exposure - total_exposure
+                if available_exposure > 0:
+                    max_qty = available_exposure / current_price
+                    patched_order = ActionOrder(
+                        symbol=order.symbol,
+                        side=order.side,
+                        type=order.type,
+                        quantity=max_qty,
+                        price=order.price,
+                        stop_price=order.stop_price,
+                        take_profit=order.take_profit,
+                        stop_loss=order.stop_loss
+                    )
+                    return True, f"Qty reduced to fit total exposure limit", patched_order
+                else:
+                    return False, f"Total exposure limit reached: {self.limits.max_total_exposure_pct}%", None
+        
+        # 4. Check stop-loss requirement (for opening orders)
+        if self.limits.require_stop_loss and intent in [ActionIntent.OPEN_LONG, ActionIntent.OPEN_SHORT]:
+            if notional >= self.limits.stop_loss_threshold_usd:
+                if not order.stop_loss:
+                    return False, f"Stop-loss required for positions > ${self.limits.stop_loss_threshold_usd:.0f}", None
+        
+        # 5. Check leverage limit (simplified check)
+        if intent in [ActionIntent.OPEN_LONG, ActionIntent.OPEN_SHORT, ActionIntent.SCALE_IN]:
+            # Calculate implied leverage
+            total_notional = portfolio.exposure + notional
+            implied_leverage = total_notional / portfolio.equity if portfolio.equity > 0 else 0
+            
+            if implied_leverage > self.limits.max_leverage:
+                # Try to patch
+                max_notional = (portfolio.equity * self.limits.max_leverage) - portfolio.exposure
+                if max_notional > 0:
+                    max_qty = max_notional / current_price
+                    patched_order = ActionOrder(
+                        symbol=order.symbol,
+                        side=order.side,
+                        type=order.type,
+                        quantity=max_qty,
+                        price=order.price,
+                        stop_price=order.stop_price,
+                        take_profit=order.take_profit,
+                        stop_loss=order.stop_loss
+                    )
+                    return True, f"Qty reduced to fit leverage limit", patched_order
+                else:
+                    return False, f"Leverage limit reached: {self.limits.max_leverage:.1f}x", None
+        
+        # All checks passed
+        return True, "Order valid", order
     
-    def check_drawdown(self, portfolio: PortfolioState, session_start_equity: float) -> Tuple[bool, str]:
-        """Check if intraday drawdown limit exceeded"""
+    def _update_risk_state(self, portfolio: PortfolioState):
+        """Update risk state and check for kill-switch conditions"""
         
-        dd_pct = ((portfolio.equity - session_start_equity) / session_start_equity) * 100.0
+        current_equity = portfolio.equity
         
- if dd_pct < -self.config.max_drawdown_intraday_pct:
-        return False, f"Intraday drawdown {dd_pct:.2f}% exceeds limit {self.config.max_drawdown_intraday_pct}%"
+        # Update high-water mark
+        if current_equity > self.state.session_high_equity:
+            self.state.session_high_equity = current_equity
         
-        return True, "OK"
+        # Calculate drawdown from session high
+        drawdown_pct = ((current_equity - self.state.session_high_equity) / self.state.session_high_equity) * 100
+        self.state.current_drawdown_pct = drawdown_pct
+        
+        # Check kill-switch condition
+        if not self.state.kill_switch_active and drawdown_pct < -self.limits.max_drawdown_intraday_pct:
+            self._activate_kill_switch(
+                f"Intraday drawdown limit breached: {drawdown_pct:.2f}% < -{self.limits.max_drawdown_intraday_pct:.2f}%"
+            )
+    
+    def _activate_kill_switch(self, reason: str):
+        """Activate kill-switch: block new entries, only allow exits"""
+        self.state.kill_switch_active = True
+        self.state.kill_switch_reason = reason
+        self.state.kill_switch_triggered_at = int(time.time() * 1000)
+        
+        print(f"\n{'='*70}")
+        print(f"🚨 KILL-SWITCH ACTIVATED 🚨")
+        print(f"Reason: {reason}")
+        print(f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Current equity: ${self.state.session_high_equity * (1 + self.state.current_drawdown_pct/100):,.2f}")
+        print(f"Session high: ${self.state.session_high_equity:,.2f}")
+        print(f"Drawdown: {self.state.current_drawdown_pct:.2f}%")
+        print(f"{'='*70}\n")
+    
+    def deactivate_kill_switch(self, reason: str = "Manual override"):
+        """Deactivate kill-switch (manual intervention)"""
+        if self.state.kill_switch_active:
+            print(f"\n[RiskGuard] Kill-switch DEACTIVATED: {reason}")
+            self.state.kill_switch_active = False
+            self.state.kill_switch_reason = ""
+    
+    def reset_session(self, current_equity: float):
+        """Reset session metrics (for new trading session)"""
+        self.state.session_start_equity = current_equity
+        self.state.session_high_equity = current_equity
+        self.state.current_drawdown_pct = 0.0
+        self.state.violations_count = 0
+        self.state.kill_switch_active = False
+        print(f"[RiskGuard] Session reset: starting equity ${current_equity:,.2f}")
+    
+    def get_risk_metrics(self) -> Dict:
+        """Get current risk metrics for monitoring"""
+        return {
+            'kill_switch_active': self.state.kill_switch_active,
+            'kill_switch_reason': self.state.kill_switch_reason,
+            'current_drawdown_pct': self.state.current_drawdown_pct,
+            'session_high_equity': self.state.session_high_equity,
+            'violations_count': self.state.violations_count,
+            'max_drawdown_limit': self.limits.max_drawdown_intraday_pct
+        }
+    
+    def _estimate_price(self, symbol: str, portfolio: PortfolioState) -> Optional[float]:
+        """Estimate current price from portfolio positions"""
+        for pos in portfolio.positions:
+            if pos.symbol == symbol:
+                return pos.current_price
+        
+        # If no position, we can't estimate (caller should provide)
+        # In practice, this will be called after market data fetch
+        return None
