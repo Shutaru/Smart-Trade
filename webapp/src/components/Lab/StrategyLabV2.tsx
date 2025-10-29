@@ -273,33 +273,73 @@ disabled={!validation.valid || isBackfilling || strategy.symbols.length === 0}
 
       {/* Strategy Name */}
       <Card>
- <CardHeader>
-<CardTitle>Strategy Name</CardTitle>
-          <CardDescription>Give your strategy a unique identifier</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-          <FormField
-        control={form.control}
-              name="name"
-  render={({ field }) => (
-    <FormItem>
-   <FormControl>
-      <Input
-             {...field}
-        placeholder="My Awesome Strategy"
-        onChange={(e) => {
-         field.onChange(e);
-            setStrategy({ ...strategy, name: e.target.value });
-          }}
+        <CardHeader>
+          <CardTitle>Strategy Name & Portfolio</CardTitle>
+          <CardDescription>Give your strategy a unique identifier and set initial capital</CardDescription>
+ </CardHeader>
+ <CardContent>
+    <Form {...form}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Strategy Name */}
+            <FormField
+      control={form.control}
+           name="name"
+            render={({ field }) => (
+             <FormItem>
+       <FormLabel>Strategy Name</FormLabel>
+       <FormControl>
+       <Input
+     {...field}
+  placeholder="My Awesome Strategy"
+          onChange={(e) => {
+    field.onChange(e);
+    setStrategy({ ...strategy, name: e.target.value });
+                    }}
      />
+      </FormControl>
+         <FormMessage />
+              </FormItem>
+           )}
+       />
+
+  {/* Initial Portfolio Size */}
+              <FormField
+        control={form.control}
+                name="initialEquity"
+             render={({ field }) => (
+      <FormItem>
+            <FormLabel className="flex items-center gap-2">
+        <Target className="h-4 w-4" />
+      Initial Portfolio Size (USDT)
+          </FormLabel>
+      <FormControl>
+      <div className="relative">
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+   <Input
+    type="number"
+  className="pl-7"
+   {...field}
+      onChange={(e) => {
+           const value = parseFloat(e.target.value) || 10000;
+       field.onChange(value);
+      setStrategy({
+    ...strategy,
+         risk: { ...strategy.risk, initialEquity: value }
+     });
+     }}
+      />
+   </div>
   </FormControl>
-            <FormMessage />
-         </FormItem>
-            )}
-   />
-          </Form>
-        </CardContent>
+     <FormDescription>
+Starting capital for backtesting (min: $100)
+         </FormDescription>
+          <FormMessage />
+       </FormItem>
+   )}
+       />
+  </div>
+    </Form>
+    </CardContent>
       </Card>
 
       {/* Validation Status */}
@@ -714,7 +754,7 @@ function ExitsSection({ strategy, setStrategy }: ExitsSectionProps) {
             ?? LONG: {strategy.long.exits.takeProfit.length} TP, {strategy.long.exits.stopLoss.length} SL, {strategy.long.exits.trailing.length} Trailing
           </p>
           <p className="text-sm text-muted-foreground">
-            ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.trailing.length} Trailing
+            ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.TRAILING.length} Trailing
       </p>
           <Button size="sm" variant="outline">
             <Plus className="mr-2 h-4 w-4" />
