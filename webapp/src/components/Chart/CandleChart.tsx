@@ -59,13 +59,13 @@ const CandleChart: React.FC = () => {
 
   return (
     <Card className="shadow-soft">
-        <CardContent className="p-0">
-            {isLoading ? (
-                <Skeleton className="w-full h-[500px]" />
-            ) : (
-                <div ref={chartContainerRef} className="w-full h-[500px]" />
-            )}
-        </CardContent>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <Skeleton className="w-full h-[500px]" />
+        ) : (
+          <div ref={chartContainerRef} className="w-full h-[500px]" />
+        )}
+      </CardContent>
     </Card>
   );
 };

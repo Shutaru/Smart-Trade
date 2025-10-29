@@ -54,7 +54,6 @@ import {
   Check,
   ChevronsUpDown,
   Plus,
-  Trash2,
   Download,
   Play,
   Sparkles,
@@ -67,14 +66,13 @@ import {
   createDefaultStrategy, 
   validateStrategy,
   type StrategyDefinition,
-  type EntryCondition,
   INDICATOR_CATALOG
 } from '@/domain/strategy';
 import * as LabAPI from '@/lib/api-lab';
 import { useNavigate } from 'react-router-dom';
 
 // ============================================================================
-// VALIDATION SCHEMA (Zod)
+// VALIDATION SCHEMA
 // ============================================================================
 
 const strategyFormSchema = z.object({
@@ -114,8 +112,8 @@ export function StrategyLabV2() {
       symbols: strategy.symbols,
       baseTimeframe: strategy.baseTimeframe,
       dateFrom: strategy.dateFrom,
-dateTo: strategy.dateTo,
-  initialEquity: strategy.risk.initialEquity,
+      dateTo: strategy.dateTo,
+    initialEquity: strategy.risk.initialEquity,
       maxLeverage: strategy.risk.maxLeverage,
       maxConcurrentPositions: strategy.risk.maxConcurrentPositions
     }
@@ -125,7 +123,7 @@ dateTo: strategy.dateTo,
   const { data: symbols = [], isLoading: symbolsLoading } = useQuery({
     queryKey: ['symbols', form.watch('exchange')],
     queryFn: () => LabAPI.getSymbols(form.watch('exchange')),
-    enabled: !!form.watch('exchange')
+ enabled: !!form.watch('exchange')
   });
 
   // Validate strategy
@@ -138,11 +136,11 @@ dateTo: strategy.dateTo,
     
     try {
       const result = await LabAPI.backfillData({
-      exchange: strategy.exchange,
+exchange: strategy.exchange,
         symbols: strategy.symbols,
-        timeframe: strategy.baseTimeframe,
-        since: strategy.dateFrom,
- until: strategy.dateTo,
+     timeframe: strategy.baseTimeframe,
+  since: strategy.dateFrom,
+        until: strategy.dateTo,
         higher_tf: strategy.higherTimeframes || []
       });
       
@@ -154,18 +152,15 @@ dateTo: strategy.dateTo,
       // Show detailed results
       result.results.forEach(r => {
         if (r.candles_inserted > 0) {
-          toast.success(
-       `${r.symbol} @ ${r.timeframe}: ${r.candles_inserted.toLocaleString()} candles`,
- { duration: 3000 }
-        );
-        }
-  });
+ toast.success(
+     `${r.symbol} @ ${r.timeframe}: ${r.candles_inserted.toLocaleString()} candles`,
+            { duration: 3000 }
+          );
+     }
+   });
     } catch (error) {
-      const err = error as LabAPI.ApiError;
-   toast.error(
-    `? Backfill failed: ${err.message}`,
-        { id: toastId, duration: 5000 }
-      );
+const err = error as LabAPI.ApiError;
+      toast.error(`? Backfill failed: ${err.message}`, { id: toastId, duration: 5000 });
     } finally {
       setIsBackfilling(false);
     }
@@ -178,23 +173,18 @@ dateTo: strategy.dateTo,
     
     try {
       const result = await LabAPI.runBacktest(strategy);
-    
-   toast.success(
-        `? Backtest started! Run ID: ${result.run_id.substring(0, 8)}...`,
+      toast.success(
+   `? Backtest started! Run ID: ${result.run_id.substring(0, 8)}...`,
     { id: toastId, duration: 3000 }
       );
       
-      // Navigate to results page after 1 second
-      setTimeout(() => {
+setTimeout(() => {
         navigate(`/lab/results/${result.run_id}`);
       }, 1000);
     } catch (error) {
       const err = error as LabAPI.ApiError;
-    toast.error(
-        `? Backtest failed: ${err.message}`,
-        { id: toastId, duration: 5000 }
-      );
-   setIsBacktesting(false);
+      toast.error(`? Backtest failed: ${err.message}`, { id: toastId, duration: 5000 });
+      setIsBacktesting(false);
     }
   };
 
@@ -205,245 +195,233 @@ dateTo: strategy.dateTo,
     
     try {
       const result = await LabAPI.runOptuna(strategy, 100);
-
       toast.success(
         `? Optimization started! Run ID: ${result.run_id.substring(0, 8)}...`,
         { id: toastId, duration: 3000 }
       );
       
-      // Navigate to results page
       setTimeout(() => {
         navigate(`/lab/results/${result.run_id}`);
-    }, 1000);
+      }, 1000);
     } catch (error) {
       const err = error as LabAPI.ApiError;
-      toast.error(
-        `? Optimization failed: ${err.message}`,
-        { id: toastId, duration: 5000 }
-      );
+   toast.error(`? Optimization failed: ${err.message}`, { id: toastId, duration: 5000 });
       setIsOptimizing(false);
     }
   };
 
-return (
+  return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
   <div className="flex items-center justify-between">
         <div>
-     <h1 className="text-3xl font-bold tracking-tight">Strategy Lab v2</h1>
- <p className="text-muted-foreground">
-   Build, backtest, and optimize quantitative trading strategies
-      </p>
-  </div>
-        
-        <div className="flex gap-2">
- <Button
- variant="outline"
-     size="sm"
-      onClick={handleBackfill}
-disabled={!validation.valid || isBackfilling || strategy.symbols.length === 0}
-     >
-       {isBackfilling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-   <Download className="mr-2 h-4 w-4" />
-    Backfill Data
-     </Button>
-          
+  <h1 className="text-3xl font-bold tracking-tight">Strategy Lab v2</h1>
+     <p className="text-muted-foreground">
+     Build, backtest, and optimize quantitative trading strategies
+ </p>
+        </div>
+      
+<div className="flex gap-2">
           <Button
             variant="outline"
          size="sm"
-            onClick={handleBacktest}
-          disabled={!validation.valid || isBacktesting}
- >
-            {isBacktesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+    onClick={handleBackfill}
+     disabled={!validation.valid || isBackfilling || strategy.symbols.length === 0}
+          >
+         {isBackfilling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   <Download className="mr-2 h-4 w-4" />
+            Backfill Data
+     </Button>
+          
+          <Button
+         variant="outline"
+          size="sm"
+       onClick={handleBacktest}
+            disabled={!validation.valid || isBacktesting}
+          >
+         {isBacktesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Play className="mr-2 h-4 w-4" />
- Run Backtest
+  Run Backtest
           </Button>
   
-          <Button
-    size="sm"
-         onClick={handleOptimize}
-    disabled={!validation.valid || isOptimizing}
-    >
-         {isOptimizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Sparkles className="mr-2 h-4 w-4" />
-            Optimize
-          </Button>
-        </div>
-      </div>
+      <Button
+            size="sm"
+     onClick={handleOptimize}
+     disabled={!validation.valid || isOptimizing}
+          >
+ {isOptimizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      <Sparkles className="mr-2 h-4 w-4" />
+      Optimize
+       </Button>
+   </div>
+   </div>
 
-      {/* Strategy Name */}
+      {/* Strategy Name & Portfolio */}
       <Card>
         <CardHeader>
-          <CardTitle>Strategy Name & Portfolio</CardTitle>
+     <CardTitle>Strategy Name & Portfolio</CardTitle>
           <CardDescription>Give your strategy a unique identifier and set initial capital</CardDescription>
- </CardHeader>
- <CardContent>
-    <Form {...form}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Strategy Name */}
-            <FormField
-      control={form.control}
-           name="name"
-            render={({ field }) => (
-             <FormItem>
-       <FormLabel>Strategy Name</FormLabel>
-       <FormControl>
-       <Input
-     {...field}
-  placeholder="My Awesome Strategy"
-          onChange={(e) => {
-    field.onChange(e);
-    setStrategy({ ...strategy, name: e.target.value });
-                    }}
+      </CardHeader>
+  <CardContent>
+          <Form {...form}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormField
+        control={form.control}
+         name="name"
+      render={({ field }) => (
+         <FormItem>
+           <FormLabel>Strategy Name</FormLabel>
+     <FormControl>
+        <Input
+            {...field}
+placeholder="My Awesome Strategy"
+   onChange={(e) => {
+        field.onChange(e);
+      setStrategy({ ...strategy, name: e.target.value });
+      }}
      />
       </FormControl>
          <FormMessage />
-              </FormItem>
-           )}
-       />
+                </FormItem>
+      )}
+     />
 
-  {/* Initial Portfolio Size */}
-              <FormField
-        control={form.control}
-                name="initialEquity"
-             render={({ field }) => (
-      <FormItem>
-            <FormLabel className="flex items-center gap-2">
-        <Target className="h-4 w-4" />
-      Initial Portfolio Size (USDT)
-          </FormLabel>
-      <FormControl>
-      <div className="relative">
-    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-   <Input
-    type="number"
-  className="pl-7"
-   {...field}
-      onChange={(e) => {
-           const value = parseFloat(e.target.value) || 10000;
-       field.onChange(value);
-      setStrategy({
-    ...strategy,
-         risk: { ...strategy.risk, initialEquity: value }
-     });
-     }}
-      />
-   </div>
-  </FormControl>
-     <FormDescription>
-Starting capital for backtesting (min: $100)
-         </FormDescription>
-          <FormMessage />
-       </FormItem>
-   )}
-       />
-  </div>
-    </Form>
-    </CardContent>
+       <FormField
+    control={form.control}
+     name="initialEquity"
+       render={({ field }) => (
+     <FormItem>
+        <FormLabel className="flex items-center gap-2">
+   <Target className="h-4 w-4" />
+   Initial Portfolio Size (USDT)
+       </FormLabel>
+    <FormControl>
+             <div className="relative">
+         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+         <Input
+                type="number"
+              className="pl-7"
+      {...field}
+        onChange={(e) => {
+       const value = parseFloat(e.target.value) || 10000;
+      field.onChange(value);
+  setStrategy({
+        ...strategy,
+           risk: { ...strategy.risk, initialEquity: value }
+         });
+}}
+   />
+           </div>
+       </FormControl>
+   <FormDescription>
+        Starting capital for backtesting (min: $100)
+   </FormDescription>
+    <FormMessage />
+        </FormItem>
+      )}
+              />
+     </div>
+     </Form>
+   </CardContent>
       </Card>
 
-      {/* Validation Status */}
-      {validation.valid ? (
- <Card className="border-green-500/50 bg-green-50/50 dark:bg-green-950/20">
-    <CardContent className="pt-6">
-        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-        <CheckCircle2 className="h-5 w-5" />
-   <span className="font-medium">Strategy is valid and ready to run</span>
-      </div>
-          </CardContent>
+   {/* Validation Status */}
+   {validation.valid ? (
+        <Card className="border-green-500/50 bg-green-50/50 dark:bg-green-950/20">
+  <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+         <CheckCircle2 className="h-5 w-5" />
+           <span className="font-medium">Strategy is valid and ready to run</span>
+            </div>
+        </CardContent>
         </Card>
-   ) : (
-        <Card className="border-destructive">
-          <CardHeader>
+      ) : (
+      <Card className="border-destructive">
+    <CardHeader>
             <CardTitle className="text-destructive flex items-center gap-2">
-    <AlertCircle className="h-5 w-5" />
-   Validation Errors
+        <AlertCircle className="h-5 w-5" />
+              Validation Errors
             </CardTitle>
-   </CardHeader>
-      <CardContent>
-         <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
-              {validation.errors.map((error, i) => (
-            <li key={i}>{error}</li>
-   ))}
-     </ul>
-</CardContent>
+        </CardHeader>
+    <CardContent>
+            <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
+    {validation.errors.map((error, i) => (
+                <li key={i}>{error}</li>
+  ))}
+   </ul>
+        </CardContent>
         </Card>
       )}
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-5">
-        <TabsTrigger value="data">
-  <Database className="mr-2 h-4 w-4" />
+          <TabsTrigger value="data">
+ <Database className="mr-2 h-4 w-4" />
       Data
-   </TabsTrigger>
-        <TabsTrigger value="entries">
-    <TrendingUp className="mr-2 h-4 w-4" />
-            Entries
-    </TabsTrigger>
-       <TabsTrigger value="exits">
-            <ShieldAlert className="mr-2 h-4 w-4" />
-      Exits
           </TabsTrigger>
-          <TabsTrigger value="risk">
-            <Target className="mr-2 h-4 w-4" />
-   Risk
-     </TabsTrigger>
-  <TabsTrigger value="preview">
-    Preview
+          <TabsTrigger value="entries">
+       <TrendingUp className="mr-2 h-4 w-4" />
+ Entries
    </TabsTrigger>
+          <TabsTrigger value="exits">
+          <ShieldAlert className="mr-2 h-4 w-4" />
+     Exits
+          </TabsTrigger>
+       <TabsTrigger value="risk">
+     <Target className="mr-2 h-4 w-4" />
+    Risk
+          </TabsTrigger>
+          <TabsTrigger value="preview">
+            Preview
+          </TabsTrigger>
         </TabsList>
 
-        {/* DATA TAB */}
-        <TabsContent value="data" className="space-y-4">
-        <DataConfigSection
-            strategy={strategy}
-         setStrategy={setStrategy}
- form={form}
+  <TabsContent value="data" className="space-y-4">
+          <DataConfigSection
+   strategy={strategy}
+       setStrategy={setStrategy}
+            form={form}
             symbols={symbols}
-symbolsLoading={symbolsLoading}
-   />
-  </TabsContent>
+            symbolsLoading={symbolsLoading}
+          />
+        </TabsContent>
 
-        {/* ENTRIES TAB */}
         <TabsContent value="entries" className="space-y-4">
           <EntriesSection
-        strategy={strategy}
-     setStrategy={setStrategy}
-          />
-     </TabsContent>
-
- {/* EXITS TAB */}
-        <TabsContent value="exits" className="space-y-4">
-          <ExitsSection
-   strategy={strategy}
-      setStrategy={setStrategy}
-   />
-        </TabsContent>
-
-        {/* RISK TAB */}
-        <TabsContent value="risk" className="space-y-4">
- <RiskSection
-            strategy={strategy}
+          strategy={strategy}
             setStrategy={setStrategy}
-            form={form}
           />
         </TabsContent>
 
-  {/* PREVIEW TAB */}
+<TabsContent value="exits" className="space-y-4">
+  <ExitsSection
+ strategy={strategy}
+            setStrategy={setStrategy}
+          />
+      </TabsContent>
+
+        <TabsContent value="risk" className="space-y-4">
+       <RiskSection
+       strategy={strategy}
+    setStrategy={setStrategy}
+         form={form}
+/>
+        </TabsContent>
+
         <TabsContent value="preview">
           <Card>
-<CardHeader>
+    <CardHeader>
               <CardTitle>Strategy Configuration (JSON)</CardTitle>
-           <CardDescription>Review the complete strategy definition</CardDescription>
+          <CardDescription>Review the complete strategy definition</CardDescription>
             </CardHeader>
-     <CardContent>
-        <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs">
-          {JSON.stringify(strategy, null, 2)}
-    </pre>
+            <CardContent>
+   <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs">
+     {JSON.stringify(strategy, null, 2)}
+   </pre>
             </CardContent>
           </Card>
-        </TabsContent>
+    </TabsContent>
       </Tabs>
     </div>
   );
@@ -479,261 +457,253 @@ function DataConfigSection({ strategy, setStrategy, form, symbols, symbolsLoadin
   };
 
   return (
-    <>
-<Card>
-        <CardHeader>
-          <CardTitle>Exchange & Symbols</CardTitle>
-      <CardDescription>Select exchange and trading pairs</CardDescription>
-    </CardHeader>
-     <CardContent className="space-y-4">
-          {/* Exchange */}
-          <Form {...form}>
-  <FormField
-        control={form.control}
-              name="exchange"
+    <Card>
+      <CardHeader>
+        <CardTitle>Exchange & Symbols</CardTitle>
+        <CardDescription>Select exchange and trading pairs</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+<Form {...form}>
+          <FormField
+            control={form.control}
+            name="exchange"
             render={({ field }) => (
-     <FormItem>
-     <FormLabel>Exchange</FormLabel>
- <Select
-        value={field.value}
-  onValueChange={(value: 'bitget' | 'binance') => {
-        field.onChange(value);
-             setStrategy({ ...strategy, exchange: value, symbols: [] });
-               }}
+    <FormItem>
+      <FormLabel>Exchange</FormLabel>
+<Select
+      value={field.value}
+       onValueChange={(value: 'bitget' | 'binance') => {
+       field.onChange(value);
+               setStrategy({ ...strategy, exchange: value, symbols: [] });
+            }}
+             >
+       <FormControl>
+  <SelectTrigger>
+   <SelectValue />
+ </SelectTrigger>
+   </FormControl>
+                  <SelectContent>
+           <SelectItem value="bitget">Bitget</SelectItem>
+      <SelectItem value="binance">Binance</SelectItem>
+       </SelectContent>
+     </Select>
+<FormMessage />
+      </FormItem>
+     )}
+     />
+ </Form>
+
+        <div className="space-y-2">
+      <Label>Symbols ({strategy.symbols.length} selected)</Label>
+   <Popover open={symbolSearchOpen} onOpenChange={setSymbolSearchOpen}>
+  <PopoverTrigger asChild>
+<Button
+    variant="outline"
+    role="combobox"
+          className="w-full justify-between"
+           disabled={!strategy.exchange}
+         >
+     {strategy.symbols.length === 0 ? 'Select symbols...' : `${strategy.symbols.length} selected`}
+   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+    </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-0">
+    <Command>
+     <CommandInput
+         placeholder="Search symbols..."
+   value={symbolSearch}
+         onValueChange={setSymbolSearch}
+  />
+      <CommandEmpty>
+         {symbolsLoading ? (
+  <div className="flex items-center justify-center p-4">
+                 <Loader2 className="h-4 w-4 animate-spin" />
+           </div>
+    ) : (
+        'No symbols found'
+           )}
+     </CommandEmpty>
+       <CommandGroup className="max-h-[300px] overflow-auto">
+          {filteredSymbols.slice(0, 50).map((symbol) => (
+<CommandItem
+     key={symbol}
+    onSelect={() => toggleSymbol(symbol)}
+          >
+    <Check
+  className={cn(
+     'mr-2 h-4 w-4',
+   strategy.symbols.includes(symbol) ? 'opacity-100' : 'opacity-0'
+   )}
+    />
+                 {symbol}
+        </CommandItem>
+))}
+      </CommandGroup>
+          </Command>
+    </PopoverContent>
+          </Popover>
+
+      {strategy.symbols.length > 0 && (
+      <div className="flex flex-wrap gap-2 mt-2">
+    {strategy.symbols.map(symbol => (
+    <Badge key={symbol} variant="secondary" className="gap-1">
+   {symbol}
+ <button
+   onClick={() => toggleSymbol(symbol)}
+          className="ml-1 hover:text-destructive"
+        >
+          ×
+       </button>
+          </Badge>
+        ))}
+            </div>
+          )}
+        </div>
+
+        <Form {...form}>
+      <FormField
+    control={form.control}
+       name="baseTimeframe"
+   render={({ field }) => (
+   <FormItem>
+          <FormLabel>Base Timeframe</FormLabel>
+      <Select
+              value={field.value}
+             onValueChange={(value) => {
+    field.onChange(value);
+    setStrategy({ ...strategy, baseTimeframe: value });
+   }}
         >
   <FormControl>
-            <SelectTrigger>
+          <SelectTrigger>
           <SelectValue />
            </SelectTrigger>
- </FormControl>
-       <SelectContent>
-           <SelectItem value="bitget">Bitget</SelectItem>
-         <SelectItem value="binance">Binance</SelectItem>
-         </SelectContent>
-              </Select>
-      <FormMessage />
-    </FormItem>
-              )}
-            />
-          </Form>
+            </FormControl>
+    <SelectContent>
+           <SelectItem value="1m">1 minute</SelectItem>
+      <SelectItem value="5m">5 minutes</SelectItem>
+    <SelectItem value="15m">15 minutes</SelectItem>
+      <SelectItem value="1h">1 hour</SelectItem>
+         <SelectItem value="4h">4 hours</SelectItem>
+        <SelectItem value="1d">1 day</SelectItem>
+     </SelectContent>
+     </Select>
+     <FormMessage />
+              </FormItem>
+ )}
+          />
+        </Form>
 
-          {/* Symbols Multi-Select */}
-   <div className="space-y-2">
-<Label>Symbols ({strategy.symbols.length} selected)</Label>
-        <Popover open={symbolSearchOpen} onOpenChange={setSymbolSearchOpen}>
-              <PopoverTrigger asChild>
-    <Button
-      variant="outline"
-   role="combobox"
-           className="w-full justify-between"
-      disabled={!strategy.exchange}
-    >
-            {strategy.symbols.length === 0 ? 'Select symbols...' : `${strategy.symbols.length} selected`}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-         </Button>
-</PopoverTrigger>
-  <PopoverContent className="w-[400px] p-0">
-          <Command>
-       <CommandInput
-   placeholder="Search symbols..."
-  value={symbolSearch}
-      onValueChange={setSymbolSearch}
-   />
-          <CommandEmpty>
-      {symbolsLoading ? (
-     <div className="flex items-center justify-center p-4">
- <Loader2 className="h-4 w-4 animate-spin" />
-               </div>
-    ) : (
-          'No symbols found'
-      )}
-       </CommandEmpty>
-       <CommandGroup className="max-h-[300px] overflow-auto">
-     {filteredSymbols.slice(0, 50).map((symbol) => (
- <CommandItem
-        key={symbol}
-          onSelect={() => toggleSymbol(symbol)}
-               >
-        <Check
-           className={cn(
-   'mr-2 h-4 w-4',
-           strategy.symbols.includes(symbol) ? 'opacity-100' : 'opacity-0'
-        )}
- />
-           {symbol}
-       </CommandItem>
-         ))}
-       </CommandGroup>
-        </Command>
-       </PopoverContent>
-            </Popover>
-
-  {strategy.symbols.length > 0 && (
-    <div className="flex flex-wrap gap-2 mt-2">
-          {strategy.symbols.map(symbol => (
-         <Badge key={symbol} variant="secondary" className="gap-1">
-      {symbol}
-    <button
-     onClick={() => toggleSymbol(symbol)}
-               className="ml-1 hover:text-destructive"
-           >
-   ×
-     </button>
-            </Badge>
-     ))}
-    </div>
-   )}
- </div>
-
-          {/* Timeframe */}
-   <Form {...form}>
-  <FormField
-       control={form.control}
-     name="baseTimeframe"
-render={({ field }) => (
-    <FormItem>
-         <FormLabel>Base Timeframe</FormLabel>
-           <Select
-        value={field.value}
-    onValueChange={(value) => {
-       field.onChange(value);
-  setStrategy({ ...strategy, baseTimeframe: value });
-            }}
-       >
-           <FormControl>
-            <SelectTrigger>
-             <SelectValue />
-       </SelectTrigger>
-       </FormControl>
-         <SelectContent>
-    <SelectItem value="1m">1 minute</SelectItem>
-          <SelectItem value="5m">5 minutes</SelectItem>
-             <SelectItem value="15m">15 minutes</SelectItem>
-    <SelectItem value="1h">1 hour</SelectItem>
-        <SelectItem value="4h">4 hours</SelectItem>
-       <SelectItem value="1d">1 day</SelectItem>
-         </SelectContent>
-            </Select>
-        <FormMessage />
-        </FormItem>
-     )}
-      />
-</Form>
-
- {/* Date Range */}
-      <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-     <Label>Start Date</Label>
-              <Input
-        type="datetime-local"
- value={new Date(strategy.dateFrom).toISOString().slice(0, 16)}
-    onChange={(e) => {
-          const timestamp = new Date(e.target.value).getTime();
-       setStrategy({ ...strategy, dateFrom: timestamp });
-      form.setValue('dateFrom', timestamp);
-      }}
-  />
-  </div>
-    <div className="space-y-2">
- <Label>End Date</Label>
-              <Input
-     type="datetime-local"
-  value={new Date(strategy.dateTo).toISOString().slice(0, 16)}
-                onChange={(e) => {
-        const timestamp = new Date(e.target.value).getTime();
-           setStrategy({ ...strategy, dateTo: timestamp });
-         form.setValue('dateTo', timestamp);
+<div className="grid grid-cols-2 gap-4">
+     <div className="space-y-2">
+<Label>Start Date</Label>
+   <Input
+ type="datetime-local"
+         value={new Date(strategy.dateFrom).toISOString().slice(0, 16)}
+         onChange={(e) => {
+                const timestamp = new Date(e.target.value).getTime();
+           setStrategy({ ...strategy, dateFrom: timestamp });
+       form.setValue('dateFrom', timestamp);
           }}
    />
-     </div>
-    </div>
-        </CardContent>
-      </Card>
-    </>
-  );
-}
-
-// ============================================================================
-// ENTRIES SECTION (Placeholder)
-// ============================================================================
-
-interface EntriesSectionProps {
-  strategy: StrategyDefinition;
-setStrategy: (strategy: StrategyDefinition) => void;
-}
-
-function EntriesSection({ strategy, setStrategy }: EntriesSectionProps) {
-  return (
-    <Card>
- <CardHeader>
- <CardTitle>Entry Conditions</CardTitle>
-        <CardDescription>Define when to enter LONG and SHORT positions</CardDescription>
-      </CardHeader>
-      <CardContent>
-  <div className="space-y-4">
-          {/* LONG Side */}
-      <div className="space-y-2">
-          <div className="flex items-center justify-between">
-        <Label>LONG Entries</Label>
-   <Switch
-      checked={strategy.long.enabled}
-      onCheckedChange={(checked) => {
-       setStrategy({
-  ...strategy,
-     long: { ...strategy.long, enabled: checked }
-         });
-       }}
-        />
-            </div>
-   {strategy.long.enabled && (
-              <div className="p-4 border rounded-lg space-y-2">
-            <p className="text-sm text-muted-foreground">
-           Conditions: {strategy.long.entry.all.length} ALL, {strategy.long.entry.any.length} ANY
-        </p>
-                <Button size="sm" variant="outline">
-       <Plus className="mr-2 h-4 w-4" />
-         Add Condition
-        </Button>
-              </div>
-      )}
           </div>
-
-          <Separator />
-
-          {/* SHORT Side */}
-          <div className="space-y-2">
-    <div className="flex items-center justify-between">
-          <Label>SHORT Entries</Label>
-     <Switch
-     checked={strategy.short.enabled}
-         onCheckedChange={(checked) => {
-    setStrategy({
-       ...strategy,
-             short: { ...strategy.short, enabled: checked }
-      });
-    }}
-  />
-       </div>
-            {strategy.short.enabled && (
-   <div className="p-4 border rounded-lg space-y-2">
-      <p className="text-sm text-muted-foreground">
-       Conditions: {strategy.short.entry.all.length} ALL, {strategy.short.entry.any.length} ANY
-   </p>
-      <Button size="sm" variant="outline">
-      <Plus className="mr-2 h-4 w-4" />
-            Add Condition
-   </Button>
-  </div>
-   )}
-     </div>
-    </div>
- </CardContent>
+        <div className="space-y-2">
+            <Label>End Date</Label>
+            <Input
+     type="datetime-local"
+    value={new Date(strategy.dateTo).toISOString().slice(0, 16)}
+            onChange={(e) => {
+  const timestamp = new Date(e.target.value).getTime();
+   setStrategy({ ...strategy, dateTo: timestamp });
+    form.setValue('dateTo', timestamp);
+ }}
+     />
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 }
 
 // ============================================================================
-// EXITS SECTION (Placeholder)
+// ENTRIES SECTION
+// ============================================================================
+
+interface EntriesSectionProps {
+  strategy: StrategyDefinition;
+  setStrategy: (strategy: StrategyDefinition) => void;
+}
+
+function EntriesSection({ strategy, setStrategy }: EntriesSectionProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Entry Conditions</CardTitle>
+        <CardDescription>Define when to enter LONG and SHORT positions</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+              <Label>LONG Entries</Label>
+       <Switch
+             checked={strategy.long.enabled}
+      onCheckedChange={(checked) => {
+     setStrategy({
+         ...strategy,
+ long: { ...strategy.long, enabled: checked }
+ });
+      }}
+          />
+            </div>
+            {strategy.long.enabled && (
+   <div className="p-4 border rounded-lg space-y-2">
+             <p className="text-sm text-muted-foreground">
+      Conditions: {strategy.long.entry.all.length} ALL, {strategy.long.entry.any.length} ANY
+       </p>
+       <Button size="sm" variant="outline">
+    <Plus className="mr-2 h-4 w-4" />
+    Add Condition
+         </Button>
+   </div>
+        )}
+          </div>
+
+          <Separator />
+
+     <div className="space-y-2">
+     <div className="flex items-center justify-between">
+       <Label>SHORT Entries</Label>
+              <Switch
+          checked={strategy.short.enabled}
+ onCheckedChange={(checked) => {
+ setStrategy({
+          ...strategy,
+     short: { ...strategy.short, enabled: checked }
+       });
+    }}
+    />
+            </div>
+          {strategy.short.enabled && (
+     <div className="p-4 border rounded-lg space-y-2">
+       <p className="text-sm text-muted-foreground">
+         Conditions: {strategy.short.entry.all.length} ALL, {strategy.short.entry.any.length} ANY
+              </p>
+     <Button size="sm" variant="outline">
+    <Plus className="mr-2 h-4 w-4" />
+     Add Condition
+      </Button>
+   </div>
+  )}
+ </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// EXITS SECTION
 // ============================================================================
 
 interface ExitsSectionProps {
@@ -744,23 +714,23 @@ interface ExitsSectionProps {
 function ExitsSection({ strategy, setStrategy }: ExitsSectionProps) {
   return (
     <Card>
-      <CardHeader>
- <CardTitle>Exit Rules</CardTitle>
-    <CardDescription>Define take-profit, stop-loss, and trailing stops</CardDescription>
+  <CardHeader>
+        <CardTitle>Exit Rules</CardTitle>
+        <CardDescription>Define take-profit, stop-loss, and trailing stops</CardDescription>
       </CardHeader>
-    <CardContent>
+      <CardContent>
         <div className="space-y-4">
+     <p className="text-sm text-muted-foreground">
+ ?? LONG: {strategy.long.exits.takeProfit.length} TP, {strategy.long.exits.stopLoss.length} SL, {strategy.long.exits.trailing.length} Trailing
+     </p>
           <p className="text-sm text-muted-foreground">
-            ?? LONG: {strategy.long.exits.takeProfit.length} TP, {strategy.long.exits.stopLoss.length} SL, {strategy.long.exits.trailing.length} Trailing
+  ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.trailing.length} Trailing
           </p>
-          <p className="text-sm text-muted-foreground">
-            ?? SHORT: {strategy.short.exits.takeProfit.length} TP, {strategy.short.exits.stopLoss.length} SL, {strategy.short.exits.trailing.length} Trailing
-      </p>
-          <Button size="sm" variant="outline">
+   <Button size="sm" variant="outline">
             <Plus className="mr-2 h-4 w-4" />
-            Add Exit Rule
-     </Button>
-    </div>
+   Add Exit Rule
+   </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -779,165 +749,160 @@ interface RiskSectionProps {
 function RiskSection({ strategy, setStrategy, form }: RiskSectionProps) {
   return (
     <Card>
-   <CardHeader>
+      <CardHeader>
         <CardTitle>Risk Management</CardTitle>
-    <CardDescription>Configure position sizing and risk parameters</CardDescription>
+     <CardDescription>Configure position sizing and risk parameters</CardDescription>
       </CardHeader>
-    <CardContent className="space-y-4">
-    <Form {...form}>
-          {/* Initial Equity */}
-     <FormField
-            control={form.control}
-            name="initialEquity"
-   render={({ field }) => (
-         <FormItem>
-  <FormLabel>Initial Portfolio Size (USDT)</FormLabel>
-       <FormControl>
-    <Input
-            type="number"
-      {...field}
-  onChange={(e) => {
-       const value = parseFloat(e.target.value);
-        field.onChange(value);
- setStrategy({
-      ...strategy,
-        risk: { ...strategy.risk, initialEquity: value }
-        });
-   }}
-                  />
-             </FormControl>
-            <FormDescription>Starting capital for backtesting</FormDescription>
-              <FormMessage />
-     </FormItem>
-  )}
-          />
-
-          {/* Max Leverage */}
+      <CardContent className="space-y-4">
+        <Form {...form}>
           <FormField
-  control={form.control}
-            name="maxLeverage"
-          render={({ field }) => (
-              <FormItem>
-     <FormLabel>Max Leverage</FormLabel>
-   <FormControl>
-               <Input
-      type="number"
-           {...field}
-         onChange={(e) => {
- const value = parseFloat(e.target.value);
-     field.onChange(value);
-      setStrategy({
-     ...strategy,
-       risk: { ...strategy.risk, maxLeverage: value }
-           });
- }}
-           />
-    </FormControl>
-     <FormMessage />
-        </FormItem>
-       )}
-        />
-
-     {/* Max Concurrent Positions */}
-  <FormField
-            control={form.control}
-  name="maxConcurrentPositions"
+     control={form.control}
+ name="initialEquity"
             render={({ field }) => (
-    <FormItem>
-     <FormLabel>Max Concurrent Positions</FormLabel>
-       <FormControl>
-      <Input
-           type="number"
-        {...field}
-   onChange={(e) => {
-            const value = parseInt(e.target.value);
-             field.onChange(value);
-   setStrategy({
-            ...strategy,
-                  risk: { ...strategy.risk, maxConcurrentPositions: value }
-           });
-            }}
-     />
-   </FormControl>
-     <FormMessage />
+   <FormItem>
+         <FormLabel>Initial Portfolio Size (USDT)</FormLabel>
+      <FormControl>
+         <Input
+          type="number"
+           {...field}
+           onChange={(e) => {
+           const value = parseFloat(e.target.value);
+                  field.onChange(value);
+        setStrategy({
+        ...strategy,
+              risk: { ...strategy.risk, initialEquity: value }
+  });
+          }}
+      />
+          </FormControl>
+      <FormDescription>Starting capital for backtesting</FormDescription>
+   <FormMessage />
   </FormItem>
-       )}
+            )}
           />
 
-          {/* Position Sizing Mode */}
-      <div className="space-y-2">
-            <Label>Position Sizing Mode</Label>
-            <Select
-    value={strategy.risk.positionSizingMode}
-              onValueChange={(value: any) => {
-                setStrategy({
+        <FormField
+            control={form.control}
+            name="maxLeverage"
+      render={({ field }) => (
+<FormItem>
+   <FormLabel>Max Leverage</FormLabel>
+          <FormControl>
+       <Input
+              type="number"
+      {...field}
+     onChange={(e) => {
+        const value = parseFloat(e.target.value);
+           field.onChange(value);
+        setStrategy({
      ...strategy,
-                risk: { ...strategy.risk, positionSizingMode: value }
-  });
-     }}
-    >
-       <SelectTrigger>
-     <SelectValue />
-   </SelectTrigger>
-    <SelectContent>
-    <SelectItem value="fixed_usd">Fixed USD</SelectItem>
-        <SelectItem value="portfolio_pct">Portfolio %</SelectItem>
-     <SelectItem value="risk_pct">Risk %</SelectItem>
-         <SelectItem value="kelly">Kelly Criterion</SelectItem>
-      </SelectContent>
-            </Select>
-        </div>
-
-   {/* Size Value (conditional) */}
-        {strategy.risk.positionSizingMode === 'fixed_usd' && (
-            <div className="space-y-2">
-        <Label>Fixed Size (USDT)</Label>
-              <Input
-     type="number"
-  value={strategy.risk.fixedUsdSize || 1000}
-        onChange={(e) => {
-         setStrategy({
-      ...strategy,
-    risk: { ...strategy.risk, fixedUsdSize: parseFloat(e.target.value) }
-        });
-       }}
-    />
-      </div>
-      )}
-
-     {strategy.risk.positionSizingMode === 'portfolio_pct' && (
- <div className="space-y-2">
-           <Label>Portfolio %</Label>
-          <Input
-    type="number"
-    value={strategy.risk.portfolioPct || 10}
-         onChange={(e) => {
-          setStrategy({
-  ...strategy,
-       risk: { ...strategy.risk, portfolioPct: parseFloat(e.target.value) }
+    risk: { ...strategy.risk, maxLeverage: value }
        });
-       }}
+        }}
+      />
+    </FormControl>
+       <FormMessage />
+   </FormItem>
+     )}
+          />
+
+       <FormField
+            control={form.control}
+            name="maxConcurrentPositions"
+            render={({ field }) => (
+              <FormItem>
+        <FormLabel>Max Concurrent Positions</FormLabel>
+        <FormControl>
+      <Input
+        type="number"
+     {...field}
+           onChange={(e) => {
+       const value = parseInt(e.target.value);
+             field.onChange(value);
+         setStrategy({
+   ...strategy,
+             risk: { ...strategy.risk, maxConcurrentPositions: value }
+         });
+          }}
         />
-            </div>
+        </FormControl>
+        <FormMessage />
+  </FormItem>
         )}
+/>
+
+       <div className="space-y-2">
+            <Label>Position Sizing Mode</Label>
+ <Select
+              value={strategy.risk.positionSizingMode}
+       onValueChange={(value: any) => {
+      setStrategy({
+        ...strategy,
+        risk: { ...strategy.risk, positionSizingMode: value }
+});
+        }}
+    >
+  <SelectTrigger>
+  <SelectValue />
+            </SelectTrigger>
+  <SelectContent>
+ <SelectItem value="fixed_usd">Fixed USD</SelectItem>
+     <SelectItem value="portfolio_pct">Portfolio %</SelectItem>
+        <SelectItem value="risk_pct">Risk %</SelectItem>
+           <SelectItem value="kelly">Kelly Criterion</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+   {strategy.risk.positionSizingMode === 'fixed_usd' && (
+       <div className="space-y-2">
+      <Label>Fixed Size (USDT)</Label>
+        <Input
+   type="number"
+   value={strategy.risk.fixedUsdSize || 1000}
+ onChange={(e) => {
+    setStrategy({
+             ...strategy,
+         risk: { ...strategy.risk, fixedUsdSize: parseFloat(e.target.value) }
+      });
+             }}
+         />
+    </div>
+       )}
+
+   {strategy.risk.positionSizingMode === 'portfolio_pct' && (
+      <div className="space-y-2">
+  <Label>Portfolio %</Label>
+  <Input
+    type="number"
+         value={strategy.risk.portfolioPct || 10}
+      onChange={(e) => {
+          setStrategy({
+            ...strategy,
+     risk: { ...strategy.risk, portfolioPct: parseFloat(e.target.value) }
+     });
+        }}
+          />
+</div>
+          )}
 
           {strategy.risk.positionSizingMode === 'risk_pct' && (
             <div className="space-y-2">
-              <Label>Risk % per Trade</Label>
-              <Input
-type="number"
-   value={strategy.risk.riskPct || 1}
-        onChange={(e) => {
-            setStrategy({
-           ...strategy,
-          risk: { ...strategy.risk, riskPct: parseFloat(e.target.value) }
-       });
-          }}
-/>
-            </div>
-          )}
-        </Form>
+        <Label>Risk % per Trade</Label>
+         <Input
+     type="number"
+      value={strategy.risk.riskPct || 1}
+                onChange={(e) => {
+          setStrategy({
+     ...strategy,
+              risk: { ...strategy.risk, riskPct: parseFloat(e.target.value) }
+     });
+        }}
+      />
+    </div>
+        )}
+ </Form>
       </CardContent>
-    </Card>
+ </Card>
   );
 }
