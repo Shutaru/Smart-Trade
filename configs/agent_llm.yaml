@@ -1,0 +1,93 @@
+# Agent Runner Configuration - LLM Policy (Ollama)
+
+# Exchange settings
+exchange: bitget
+symbols:
+  - BTC/USDT:USDT
+  - ETH/USDT:USDT
+timeframe: 5m
+base_currency: USDT
+
+# Trading mode
+paper_mode: true
+
+# Policy selection
+policy: llm  # LLM-powered trading
+fallback_policy: rule_based  # Fallback if LLM fails
+
+# LLM Configuration (Ollama)
+llm:
+  provider: ollama
+  endpoint: http://127.0.0.1:11434
+  model: llama3.2:3b
+  temperature: 0.0  # Deterministic decisions
+  max_tokens: 512  # Enough for JSON + reasoning
+  timeout: 10.0     # Seconds before timeout
+  retry_attempts: 2
+  system_prompt: |
+    You are an AGGRESSIVE crypto trader. Take MORE RISKS!
+    
+    RULES:
+    - If RSI < 45: IMMEDIATELY open_long with confidence 0.9
+    - If RSI > 55: close_long with confidence 0.9
+    - Always use quantity = 0.001 BTC
+    - Always set stop_loss = current_price * 0.98
+    - Always set take_profit = current_price * 1.04
+    
+    REQUIRED JSON FORMAT:
+    {
+      "intent": "open_long",
+      "reasoning": "RSI oversold",
+      "confidence": 0.9,
+      "orders": [{
+        "symbol": "BTC/USDT:USDT",
+        "side": "buy",
+        "type": "market",
+        "quantity": 0.001,
+        "stop_loss": 95000.0,
+        "take_profit": 105000.0
+      }]
+    }
+    
+    RULES:
+    - ONLY return valid JSON (no extra text)
+    - Use "intent" not "action"
+    - Use "quantity" not "amount"
+    - confidence between 0.0-1.0
+    - If unsure, use "hold" with low confidence
+
+# Risk limits (Conservative for LLM)
+max_exposure_pct: 30.0         # Conservative: 30% per symbol
+max_total_exposure_pct: 60.0     # Total portfolio exposure
+max_leverage: 2.0   # Lower leverage for LLM
+max_drawdown_intraday_pct: 3.0   # Stricter drawdown limit
+max_concurrent_positions: 2      # Max 2 positions
+require_stop_loss: true          # Always require SL for LLM trades
+
+# Per-trade risk management
+per_trade_risk_pct: 0.5  # Conservative: 0.5% max loss per trade
+min_risk_reward: 2.0       # Require 2:1 R:R minimum
+max_position_size_pct: 15.0  # Max 15% of equity per position
+
+# Data settings
+data_lookback_bars: 500  # Less data = faster LLM processing
+
+# Execution
+loop_interval_secs: 10  # Slower for LLM reasoning
+initial_cash: 10000.0
+
+# Fees (basis points)
+taker_fee_bps: 5.0
+maker_fee_bps: 2.0
+slippage_bps: 1.0
+
+# Paths
+runs_dir: runs
+logs_dir: logs
+
+# LLM-specific settings
+llm_advanced:
+  enable_chain_of_thought: true  # Request reasoning steps
+  enable_self_critique: false    # LLM reviews its own decision (slower)
+  min_confidence: 0.4            # BAIXADO: aceita 40% confidence
+  log_prompts: true              # Save prompts to trajectory

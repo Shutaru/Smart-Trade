@@ -1,0 +1,1 @@
+{"ts": 1761826442492, "kind": "error", "data": {"error": "'MarketDataTool' object has no attribute 'get_recent_bars'", "timestamp": 1761826442492}}

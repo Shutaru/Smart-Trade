@@ -2,7 +2,7 @@ mode: paper
 symbol: BTC/USDT:USDT
 timeframe: 5m
 db:
-  path: data/BTC/USDT:USDT.db
+  path: data/db/BTC_USDT_USDT_5m.db
 account:
   starting_equity_usd: 100000
 fees:

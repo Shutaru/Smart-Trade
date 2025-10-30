@@ -11,6 +11,7 @@ import { CompareRuns } from "@/components/Lab/StrategyLab/CompareRuns";
 import Data from "@/components/Data/Data";
 import Reports from "@/components/Reports/Reports";
 import Settings from "@/components/Settings/Settings";
+import Agent from "@/components/Agent/Agent";
 
 const router = createBrowserRouter([
     {
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
             { path: "lab/strategy", element: <StrategyLab /> },
             { path: "lab/results/:runId", element: <RunResults /> },
             { path: "lab/compare", element: <CompareRuns /> },
+            { path: "agent", element: <Agent /> },
             { path: "data", element: <Data /> },
             { path: "reports", element: <Reports /> },
             { path: "settings", element: <Settings /> },

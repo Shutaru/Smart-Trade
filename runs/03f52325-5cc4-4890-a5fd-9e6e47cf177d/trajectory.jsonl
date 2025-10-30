@@ -1,0 +1,4 @@
+{"ts": 1761817641151, "kind": "observation", "data": {"timestamp": 1761817640541, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761817640541}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761817642482, "kind": "action", "data": {"timestamp": 1761817640541, "intent": "open_long", "num_orders": 1}}
+{"ts": 1761817642483, "kind": "error", "data": {"error": "Risk rejection: ETH/USDT:USDT: Cannot determine current price", "timestamp": 1761817642483}}
+{"ts": 1761817642484, "kind": "risk_rejection", "data": {"reason": "ETH/USDT:USDT: Cannot determine current price", "original_intent": "open_long", "num_orders": 1, "risk_metrics": {"kill_switch_active": false, "kill_switch_reason": "", "current_drawdown_pct": 0.0, "session_high_equity": 10000.0, "violations_count": 1, "max_drawdown_limit": 3.0}}}

@@ -1,0 +1,2 @@
+timestamp,equity,cash,realized_pnl,unrealized_pnl,total_pnl,num_positions,drawdown_pct,sharpe_rolling,volatility_rolling
+1761817642484,10000.0,10000.0,0.0,0.0,0.0,0,0.0,0.0,0.0

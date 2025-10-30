@@ -1,0 +1,21 @@
+{
+  "run_id": "fa07ccea-a872-483d-b3f6-9a115165da37",
+  "timestamp": 1761823794731,
+  "initial_equity": 9890.13794487074,
+  "final_equity": 9885.15385200596,
+  "total_pnl": -1.1020767942472687,
+  "total_pnl_pct": -0.05039457379220838,
+  "realized_pnl": 0.0,
+  "unrealized_pnl": -1.1020767942472687,
+  "max_drawdown_pct": -0.0513960670681457,
+  "sharpe_ratio": -3.4285980104601124,
+  "volatility_annual": 0.10583719870151892,
+  "total_trades": 18,
+  "winning_trades": 0,
+  "losing_trades": 18,
+  "win_rate": 0.0,
+  "num_positions_final": 2,
+  "risk_violations": 0,
+  "kill_switch_activated": false,
+  "session_high_equity": 10000.0
+}

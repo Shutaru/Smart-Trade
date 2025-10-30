@@ -5,19 +5,22 @@ Agent Runner - Main execution loop with RiskGuard integration
 import time
 import uuid
 import argparse
+import json
+import pandas as pd
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 import numpy as np
+import json
+import pandas as pd
 
 from .config import AgentConfig
 from .schemas import Observation, Metrics, OrderType
 from .tools.market import MarketDataTool
 from .tools.portfolio import PortfolioTool
 from .tools.execution import ExecutionTool, OrderRequest
-from .policies.rule_based import RSIRulePolicy
 from .risk import RiskGuard
 from .utils.logging import AgentLogger
-from .schemas import OrderSide
+from .schemas import OrderSide, PortfolioState
 
 
 class AgentRunner:
@@ -30,17 +33,36 @@ class AgentRunner:
         # Generate run ID
         self.run_id = str(uuid.uuid4())
         self.run_dir = config.runs_dir / self.run_id
-        
+    
         # Initialize components
         self.market = MarketDataTool(config)
         self.portfolio = PortfolioTool(config)
         self.execution = ExecutionTool(config, self.portfolio)
-        self.policy = RSIRulePolicy(
-            rsi_period=14,
-            oversold=30.0,
-            overbought=70.0,
-            position_size=1000.0  # $1000 per position
-        )
+   
+                # Initialize policy based on config
+        if config.policy == "rule_based":
+            from .policies.rule_based import RSIRulePolicy
+            self.policy = RSIRulePolicy(
+                rsi_period=14,
+                oversold=30.0,
+                overbought=70.0,
+                position_size=1000.0
+            )
+            print(f"[AgentRunner] Using Rule-Based Policy (RSI)")
+        
+        elif config.policy == "llm":
+            from .policies.llm_stub import LLMPolicy
+            
+            # LLMPolicy agora recebe config completo
+            self.policy = LLMPolicy(config=config)
+            print(f"[AgentRunner] Using LLM Policy")
+            print(f"  - Model: {config.llm.model}")
+            print(f"  - Provider: {config.llm.provider}")
+            print(f"  - Fallback: {config.fallback_policy}")
+        
+        else:
+            raise ValueError(f"Unknown policy: {config.policy}")
+        
         self.risk_guard = RiskGuard(config)
         self.logger = AgentLogger(self.run_dir)
         
@@ -98,8 +120,12 @@ class AgentRunner:
                     self.portfolio.mark_to_market(current_prices)
                     updated_portfolio = self.portfolio.snapshot()
                     
-                    # Validate with RiskGuard
-                    is_valid, reason, patched_action = self.risk_guard.validate_action(action, updated_portfolio)
+                    # Validate with RiskGuard (PASS PRICES!)
+                    is_valid, reason, patched_action = self.risk_guard.validate_action(
+                        action, 
+                        updated_portfolio,
+                        current_prices  # ✅ FIX: Pass prices to RiskGuard!
+                    )
                     
                     if not is_valid:
                         print(f"[Risk] ❌ Action REJECTED: {reason}")

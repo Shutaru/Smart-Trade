@@ -204,7 +204,7 @@ class RunConfig(BaseModel):
     run_id: str
     exchange: Literal["bitget", "binance"]
     symbols: List[str] = Field(..., min_items=1)
-    timeframe: str = Field("5m", regex=r"^\d+[mhd]$")
+    timeframe: str = Field("5m", pattern=r"^\d+[mhd]$")  # CORRIGIDO: regex -> pattern
     paper_mode: bool = Field(True, description="Paper trading mode (no real orders)")
     initial_cash: float = Field(10_000.0, gt=0, description="Starting cash in USDT")
     loop_interval_secs: int = Field(2, ge=1, le=60, description="Loop sleep time")

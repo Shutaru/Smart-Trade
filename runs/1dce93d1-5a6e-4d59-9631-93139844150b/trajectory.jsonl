@@ -1,0 +1,15 @@
+{"ts": 1761824289918, "kind": "observation", "data": {"timestamp": 1761824289268, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824289268}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824295601, "kind": "action", "data": {"timestamp": 1761824289268, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824306893, "kind": "observation", "data": {"timestamp": 1761824306236, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824306236}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824310358, "kind": "action", "data": {"timestamp": 1761824306236, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824321642, "kind": "observation", "data": {"timestamp": 1761824320969, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824320969}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824324981, "kind": "action", "data": {"timestamp": 1761824320969, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824336237, "kind": "observation", "data": {"timestamp": 1761824335593, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824335593}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824339412, "kind": "action", "data": {"timestamp": 1761824335593, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824350672, "kind": "observation", "data": {"timestamp": 1761824349973, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824349973}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824354259, "kind": "action", "data": {"timestamp": 1761824349973, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824365824, "kind": "observation", "data": {"timestamp": 1761824365186, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824365186}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824369762, "kind": "action", "data": {"timestamp": 1761824365186, "intent": "hold", "num_orders": 0}}
+{"ts": 1761824380961, "kind": "observation", "data": {"timestamp": 1761824380344, "portfolio": {"cash": 10000.0, "positions": [], "equity": 10000.0, "unrealized_pnl": 0.0, "realized_pnl": 0.0, "total_pnl": 0.0, "timestamp": 1761824380344}, "num_candles": {"BTC/USDT:USDT": 500, "ETH/USDT:USDT": 500}}}
+{"ts": 1761824383852, "kind": "action", "data": {"timestamp": 1761824380344, "intent": "open_long", "num_orders": 1}}
+{"ts": 1761824384475, "kind": "fill", "data": {"timestamp": 1761824384475, "symbol": "BTC/USDT:USDT", "side": "buy", "quantity": 0.001, "price": 109933.49225, "fee": 0.054966746125, "is_maker": false, "slippage_bps": 1.0}}

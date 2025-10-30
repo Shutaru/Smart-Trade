@@ -127,12 +127,38 @@ async def get_agent_equity():
     
     Returns:
         200: [
+   {ts: unix_ms, equity: float, drawdown: float},
+       ...
+        ]
+    """
+    equity_data = agent_service.get_equity_curve()
+    return {"equity": equity_data, "count": len(equity_data)}
+
+
+def safe_path(p: str) -> str:
+    """Normaliza e impede path traversal fora do projeto"""
+    if not p:
+     raise HTTPException(400, "path vazio")
+    full = os.path.abspath(os.path.join(PROJECT_ROOT, p))
+    if not full.startswith(PROJECT_ROOT):
+      raise HTTPException(400, "path inválido")
+    return full
+
+
+@app.get("/api/agent/equity")
+async def get_agent_equity():
+    """
+    Get equity curve data
+    
+    Returns:
+        200: [
             {ts: unix_ms, equity: float, drawdown: float},
             ...
         ]
     """
     equity_data = agent_service.get_equity_curve()
     return {"equity": equity_data, "count": len(equity_data)}
+
 
 def safe_path(p: str) -> str:
     """Normaliza e impede path traversal fora do projeto"""
@@ -143,6 +169,87 @@ def safe_path(p: str) -> str:
         raise HTTPException(400, "path inválido")
     return full
 
+
+@app.get("/api/agent/candles")
+async def get_agent_candles(symbol: str = None, limit: int = 200, timeframe: str = None):
+    """
+    Get recent candles for the agent's traded symbol
+    
+    Args:
+        symbol: Trading symbol (defaults to agent's primary symbol)
+        limit: Number of candles to return (default: 200)
+        timeframe: Candle timeframe (1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d)
+    
+    Returns:
+        200: {
+            "symbol": str,
+            "timeframe": str,
+            "candles": [
+                {"time": unix_seconds, "open": float, "high": float, "low": float, "close": float, "volume": float},
+                ...
+            ]
+        }
+    """
+    # If agent is running, use its symbol and timeframe
+    if agent_service.running and agent_service.config:
+        if not symbol:
+            symbol = agent_service.config.symbols[0] if agent_service.config.symbols else "BTC/USDT:USDT"
+        if not timeframe:
+            timeframe = agent_service.config.timeframe
+    else:
+        # Fallback to config.yaml
+        import yaml
+        cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
+        symbol = symbol or cfg.get("symbol", "BTC/USDT:USDT")
+        timeframe = timeframe or cfg.get("timeframe", "5m")
+    
+    # Read candles from database
+    try:
+        import sqlite3
+        import yaml
+        
+        cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
+        db_path = cfg.get("db", {}).get("path")
+        
+        if not db_path or not os.path.exists(db_path):
+            return {"symbol": symbol, "timeframe": timeframe, "candles": []}
+        
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT ts, open, high, low, close, volume FROM candles ORDER BY ts DESC LIMIT ?",
+            (int(limit),)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        
+        # Reverse to get chronological order
+        rows = rows[::-1]
+        
+        # Convert to frontend format (unix seconds, not milliseconds)
+        candles = [
+            {
+                "time": int(r[0] / 1000),
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
+                "volume": float(r[5])
+            }
+            for r in rows
+        ]
+        
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles": candles
+        }
+    
+    except Exception as e:
+        print(f"[API] Error fetching agent candles: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"symbol": symbol, "timeframe": timeframe or "5m", "candles": []}
 
 # -------------------- Job manager (subprocess launcher) -----------------
 
@@ -895,3 +1002,33 @@ async def startup_event():
     else:
         print(f"[Startup] ⚠️  React SPA not built")
         print(f"[Startup] Run: cd webapp && npm run build")
+
+@app.get("/api/agent/llm/stats")
+async def get_llm_stats():
+    """
+    Get LLM policy statistics
+    
+    Returns:
+        200: {
+            "calls_total": int,
+            "calls_success": int,
+            "calls_failed": int,
+            "fallback_count": int,
+            "success_rate": float
+        }
+        404: Agent not running or not using LLM policy
+    """
+    if not agent_service.running:
+        raise HTTPException(404, "Agent not running")
+    
+    if not hasattr(agent_service.runner, 'policy'):
+        raise HTTPException(404, "Policy not available")
+    
+    policy = agent_service.runner.policy
+    
+    # Check if it's LLMPolicy
+    if not hasattr(policy, 'get_stats'):
+        raise HTTPException(404, "Agent not using LLM policy")
+    
+    stats = policy.get_stats()
+    return stats

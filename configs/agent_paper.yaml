@@ -1,4 +1,4 @@
-# Agent Runner Configuration - Paper Trading Mode
+# Agent Runner Configuration - Paper Trading Mode with LLM
 
 # Exchange settings
 exchange: bitget
@@ -10,18 +10,39 @@ base_currency: USDT
 # Trading mode
 paper_mode: true
 
+# Policy selection
+policy: llm  # Options: "rule_based" | "llm"
+fallback_policy: rule_based  # Fallback if LLM fails
+
+# LLM Configuration (Ollama)
+llm:
+  provider: ollama
+  endpoint: http://127.0.0.1:11434
+  model: qwen2.5:14b-instruct
+  temperature: 0.0  # Deterministic (0.0 = always same output)
+  max_tokens: 512   # Enough for JSON + reasoning
+  timeout: 10.0     # Seconds before timeout
+  retry_attempts: 2
+  # top_p: 1.0      # Not needed with temperature=0
+
 # Risk limits
-max_exposure_pct: 50.0
+max_exposure_pct: 50.0           # Max % of equity per symbol
+max_total_exposure_pct: 95.0     # Total portfolio exposure
 max_leverage: 3.0
 max_drawdown_intraday_pct: 5.0
 max_concurrent_positions: 3
-require_stop_loss: false  # Relaxed for paper mode
+require_stop_loss: false
+
+# NEW: Per-trade risk management
+per_trade_risk_pct: 1.0    # Max 1% loss per trade
+min_risk_reward: 1.5       # Minimum R:R ratio (1.5 = risk $1 to make $1.50)
+max_position_size_pct: 20.0  # Max 20% of equity per position
 
 # Data settings
 data_lookback_bars: 1000
 
 # Execution
-loop_interval_secs: 2
+loop_interval_secs: 5  # Slower for LLM (API call time)
 initial_cash: 10000.0
 
 # Fees (basis points)
