@@ -1,5 +1,5 @@
 import numpy as np, pandas as pd
-from indicators import ema, atr, rsi, adx, bollinger, donchian
+from indicators import ema, atr, rsi, adx, bollinger, donchian, macd, stoch, cci
 
 def resample(ts, o,h,l,c, tf_seconds):
     # assumes 5m base
@@ -40,7 +40,34 @@ def compute_feature_rows(ts, o, h, l, c):
     macro = np.where(np.interp(ts, ts4h, c4h, left=c4h[0], right=c4h[-1]) >= np.interp(ts, ts4h, ema200_4h, left=ema200_4h[0], right=ema200_4h[-1]), "ABOVE", "BELOW")
     atr1h_pct = np.interp(ts, ts1h, atr1h_pct_1h, left=atr1h_pct_1h[0], right=atr1h_pct_1h[-1])
 
+    # Additional indicators
+    macd_line, macd_signal, macd_hist = macd(c,12,26,9)
+    stoch_k_v, stoch_d_v = stoch(h, l, c,14,3)
+    cci20_v = cci(h, l, c,20)
+
     rows = []
     for i in range(len(ts)):
-        rows.append([int(ts[i]), float(ema20_v[i]), float(ema50_v[i]), float(atr14_v[i]), float(rsi5_v[i]), float(rsi14_v[i]), float(adx14_v[i]), float(bb_mid[i]), float(bb_lo[i]), float(bb_up[i]), float(dn55[i]), float(up55[i]), str(regime[i]), str(macro[i]), float(atr1h_pct[i])])
+        rows.append([
+        int(ts[i]),
+        float(ema20_v[i]),
+        float(ema50_v[i]),
+        float(atr14_v[i]),
+        float(rsi5_v[i]),
+        float(rsi14_v[i]),
+        float(adx14_v[i]),
+        float(bb_mid[i]),
+        float(bb_lo[i]),
+        float(bb_up[i]),
+        float(dn55[i]),
+        float(up55[i]),
+        str(regime[i]),
+        str(macro[i]),
+        float(atr1h_pct[i]),
+        float(macd_line[i]),
+        float(macd_signal[i]),
+        float(macd_hist[i]),
+        float(stoch_k_v[i]),
+        float(stoch_d_v[i]),
+        float(cci20_v[i])
+        ])
     return rows

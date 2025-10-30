@@ -26,16 +26,27 @@ st_line, st_tr = supertrend(h, l, c, n=10, mult=3.0)
 kel_mid, kel_lo, kel_up = keltner(h, l, c, n=20, mult=1.5)
 # columns mapping
 feat = {
-    "ema20":[r[1] for r in feats_rows],
-    "ema50":[r[2] for r in feats_rows],
-    "atr14":[r[3] for r in feats_rows],
-    "rsi5":[r[4] for r in feats_rows],
-    "rsi14":[r[5] for r in feats_rows],
-    "dn55":[r[10] for r in feats_rows],
-    "up55":[r[11] for r in feats_rows],
-    "regime":[r[12] for r in feats_rows],
-    "macro":[r[13] for r in feats_rows],
-    "atr1h_pct":[r[14] for r in feats_rows],
+    "ema20": [r[1] for r in feats_rows],
+    "ema50": [r[2] for r in feats_rows],
+    "atr14": [r[3] for r in feats_rows],
+    "rsi5": [r[4] for r in feats_rows],
+    "rsi14": [r[5] for r in feats_rows],
+    "adx14": [r[6] for r in feats_rows],
+    "bb_mid": [r[7] for r in feats_rows],
+    "bb_lo": [r[8] for r in feats_rows],
+    "bb_up": [r[9] for r in feats_rows],
+    "dn55": [r[10] for r in feats_rows],
+    "up55": [r[11] for r in feats_rows],
+    "regime": [r[12] for r in feats_rows],
+    "macro": [r[13] for r in feats_rows],
+    "atr1h_pct": [r[14] for r in feats_rows],
+    # additional indicators
+    "macd": [r[15] for r in feats_rows],
+    "macd_signal": [r[16] for r in feats_rows],
+    "macd_hist": [r[17] for r in feats_rows],
+    "stoch_k": [r[18] for r in feats_rows],
+    "stoch_d": [r[19] for r in feats_rows],
+    "cci20": [r[20] for r in feats_rows],
 }
 
 outdir = os.path.join("data","backtests", str(int(time.time())))

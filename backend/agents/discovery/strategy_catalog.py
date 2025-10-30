@@ -7,6 +7,7 @@ LLM will select optimal combinations based on market regime.
 
 from typing import List, Dict, Any
 from dataclasses import dataclass
+import random
 
 
 @dataclass
@@ -286,7 +287,7 @@ class StrategyTemplate:
     """
     
     @staticmethod
-    def generate_combinations(max_indicators: int = 3) -> List[Dict[str, Any]]:
+    def generate_combinations(max_indicators: int =3) -> List[Dict[str, Any]]:
         """
         Generate intelligent indicator combinations
         
@@ -304,52 +305,79 @@ class StrategyTemplate:
         
         combinations = []
         
-        # Strategy 1: Trend + Momentum
-        for trend in ['ema_20', 'ema_50', 'macd', 'supertrend']:
-            for momentum in ['rsi_14', 'stochastic', 'cci']:
+        # Create combinations:1 trend +1 momentum + optional1 volatility/volume
+        for trend in trend_indicators:
+            for momentum in momentum_indicators:
+                # base pair
+                name = f"{trend}_{momentum}"
                 combinations.append({
-                    'name': f'{trend}_{momentum}',
+                    'name': name,
                     'indicators': [trend, momentum],
-                    'entry_logic': 'trend_aligned AND momentum_oversold',
-                    'exit_logic': 'momentum_overbought OR trend_reversal'
+                    'entry_logic': 'trend_aligned AND momentum_signal',
+                    'exit_logic': 'momentum_reversal OR trend_flip'
                 })
-        
-        # Strategy 2: Trend + Momentum + Volatility
-        for trend in ['ema_20', 'supertrend']:
-            for momentum in ['rsi_14', 'mfi']:
-                for vol in ['bollinger', 'atr']:
+                
+                # add volatility
+                for vol in volatility_indicators:
+                    name2 = f"{trend}_{momentum}_{vol}"
                     combinations.append({
-                        'name': f'{trend}_{momentum}_{vol}',
+                        'name': name2,
                         'indicators': [trend, momentum, vol],
-                        'entry_logic': 'trend_aligned AND momentum_oversold AND low_volatility',
-                        'exit_logic': 'high_volatility OR momentum_overbought'
+                        'entry_logic': 'trend_aligned AND momentum_signal AND vol_filter',
+                        'exit_logic': 'vol_spike OR momentum_reversal'
+                    })
+                    
+                # add volume indicator
+                for volu in volume_indicators:
+                    name3 = f"{trend}_{momentum}_{volu}"
+                    combinations.append({
+                        'name': name3,
+                        'indicators': [trend, momentum, volu],
+                        'entry_logic': 'trend_aligned AND momentum_signal AND volume_confirmation',
+                        'exit_logic': 'volume_drop OR momentum_reversal'
                     })
         
-        # Strategy 3: Multi-timeframe
-        combinations.append({
-            'name': 'multi_tf_ema_rsi',
-            'indicators': ['ema_20', 'ema_50', 'ema_200', 'rsi_14'],
-            'entry_logic': 'ema_20 > ema_50 > ema_200 AND rsi < 40',
-            'exit_logic': 'rsi > 70 OR ema_20 < ema_50'
-        })
+        # Multi-timeframe and special templates
+        if 'ema_20' in catalog.INDICATORS and 'ema_50' in catalog.INDICATORS:
+            combinations.append({
+                'name': 'multi_tf_ema_rsi',
+                'indicators': ['ema_20', 'ema_50', 'rsi_14'],
+                'entry_logic': 'ema_20 > ema_50 AND rsi <40',
+                'exit_logic': 'rsi >70 OR ema_20 < ema_50'
+            })
+            
+        # Mean reversion / breakout templates
+        if 'bollinger' in catalog.INDICATORS and 'rsi_14' in catalog.INDICATORS:
+            combinations.append({
+                'name': 'mean_reversion_bb_rsi',
+                'indicators': ['bollinger', 'rsi_14'],
+                'entry_logic': 'price < bb_lower AND rsi <30',
+                'exit_logic': 'price > bb_middle OR rsi >50'
+            })
+            
+        if 'donchian' in catalog.INDICATORS and 'adx' in catalog.INDICATORS:
+            combinations.append({
+                'name': 'breakout_donchian_adx',
+                'indicators': ['donchian', 'adx', 'atr'],
+                'entry_logic': 'price > donchian_upper AND adx >25',
+                'exit_logic': 'price < donchian_middle OR adx <20'
+            })
         
-        # Strategy 4: Mean reversion
-        combinations.append({
-            'name': 'mean_reversion_bb_rsi',
-            'indicators': ['bollinger', 'rsi_14', 'mfi'],
-            'entry_logic': 'price < bb_lower AND rsi < 30 AND mfi < 20',
-            'exit_logic': 'price > bb_middle OR rsi > 50'
-        })
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for c in combinations:
+            key = c['name']
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(c)
         
-        # Strategy 5: Breakout
-        combinations.append({
-            'name': 'breakout_donchian_adx',
-            'indicators': ['donchian', 'adx', 'atr'],
-            'entry_logic': 'price > donchian_upper AND adx > 25 AND atr_rising',
-            'exit_logic': 'price < donchian_middle OR adx < 20'
-        })
+        # Shuffle to improve diversity of the top-N subset
+        random.shuffle(unique)
         
-        return combinations[:20]  # Limit to 20 strategies
+        # Limit to reasonable number
+        return unique[:50]
 
 
 if __name__ == '__main__':

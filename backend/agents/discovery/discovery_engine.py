@@ -54,6 +54,58 @@ class StrategyDiscoveryEngine:
                 temp_config["risk"] = dict(temp_config.get("risk", {}))
             temp_config["risk"].update(strategy_config.get("risk", {}))
 
+            # Build declarative entry logic from strategy indicators so backtest uses different rules
+            # Map known catalog ids to feature keys produced by backtest's feature extractor
+            id_to_feat = {
+                'ema_20': 'ema20', 'ema_50': 'ema50', 'ema_200': 'ema200',
+                'rsi_14': 'rsi14', 'rsi_7': 'rsi5', 'rsi_21': 'rsi14',
+                'donchian': 'up55', 'bollinger': 'bb_up', 'atr': 'atr14', 'adx': 'adx_14',
+                'cci': 'cci', 'stochastic': 'stoch_k', 'mfi': 'mfi_14', 'macd': 'macd',
+            }
+
+            indicators = strategy_config.get('indicators') or []
+            # Build simple LONG entry: any of the indicator signals triggers entry
+            long_any = []
+            short_any = []
+
+            for ind in indicators:
+                feat = id_to_feat.get(ind) or ind.replace('_','')
+                if ind.startswith('ema'):
+                    # price crosses above EMA => bullish
+                    long_any.append({'indicator': 'close', 'op': 'crosses_above', 'rhs_indicator': feat})
+                    short_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': feat})
+                elif ind.startswith('rsi'):
+                    # RSI crosses above30 => long, crosses below70 => short
+                    long_any.append({'indicator': feat, 'op': 'crosses_above', 'rhs':30})
+                    short_any.append({'indicator': feat, 'op': 'crosses_below', 'rhs':70})
+                elif ind in ('bollinger','bollinger_upper','bb_upper','bb_up'):
+                    # price crosses below lower band -> mean reversion long
+                    long_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': 'bb_lo'})
+                elif ind == 'donchian':
+                    long_any.append({'indicator': 'close', 'op': 'crosses_above', 'rhs_indicator': 'up55'})
+                    short_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': 'dn55'})
+                elif ind == 'atr':
+                    # volatility breakout filter - require ATR increasing (use crosses_above on atr)
+                    long_any.append({'indicator': 'atr14', 'op': 'crosses_above', 'rhs':0.0})
+                else:
+                    # Generic: if feature exists, use LHS > RHS simple check (tunable)
+                    long_any.append({'indicator': feat, 'op': '>', 'rhs':0})
+
+            entry_obj = {
+                'long': {
+                    'entry_all': [],
+                    'entry_any': long_any
+                },
+                'short': {
+                    'entry_all': [],
+                    'entry_any': short_any
+                }
+            }
+
+            # Attach declarative entry into risk config (should_enter reads params.get('entry') from risk)
+            temp_config.setdefault('risk', {})
+            temp_config['risk']['entry'] = entry_obj
+
             with temp_config_path.open("w", encoding="utf-8") as f:
                 yaml.safe_dump(temp_config, f)
 
@@ -94,16 +146,53 @@ class StrategyDiscoveryEngine:
                     print("Error: <failed to decode stderr>")
                 return None
 
-            # Parse results (expect last line JSON)
+            # Parse results: stdout may contain pretty-printed JSON across multiple lines.
             output_text = stdout.decode("utf-8", errors="replace").strip()
             if not output_text:
                 print(f"[Discovery] Empty stdout for {strategy_name}")
                 return None
 
+            result_json = None
+            #1) try full output
             try:
-                last_line = output_text.splitlines()[-1]
-                result_json = json.loads(last_line)
+                result_json = json.loads(output_text)
             except Exception:
+                pass
+
+            #2) try to locate a balanced JSON object by scanning braces
+            if result_json is None:
+                import re
+                for m in re.finditer(r"\{", output_text):
+                    start = m.start()
+                    depth =0
+                    for j in range(start, len(output_text)):
+                        ch = output_text[j]
+                        if ch == '{':
+                            depth +=1
+                        elif ch == '}':
+                            depth -=1
+                        if depth ==0:
+                            cand = output_text[start:j+1]
+                            try:
+                                result_json = json.loads(cand)
+                                # found a balanced JSON block
+                                break
+                            except Exception:
+                                # failed to parse this block, continue searching
+                                break
+                    if result_json is not None:
+                        break
+
+            #3) fallback: try each line separately
+            if result_json is None:
+                for line in output_text.splitlines():
+                    try:
+                        result_json = json.loads(line)
+                        break
+                    except Exception:
+                        continue
+
+            if result_json is None:
                 # Save stdout/stderr to files for debugging
                 log_dir = Path("data") / "discovery" / "logs"
                 log_dir.mkdir(parents=True, exist_ok=True)
@@ -271,23 +360,47 @@ class StrategyDiscoveryEngine:
                         import sqlite3
                         conn = sqlite3.connect(p)
                         cur = conn.cursor()
-                        # try multiple table names
-                        table_candidates = ["candles", f"candles_{tf.replace('m','min').replace('h','hr').replace('d','day')}]"]
+                        # try multiple table names and pick the one with largest span/rows
+                        candidate_tbl = f"candles_{tf.replace('m','min').replace('h','hr').replace('d','day')}"
+                        table_candidates = [candidate_tbl, "candles"]
                         ts_min = None; ts_max = None; rows =0
+                        best_span =0.0
+                        best_detail = None
                         for tbl in table_candidates:
                             try:
                                 cur.execute(f"SELECT COUNT(*), MIN(ts), MAX(ts) FROM {tbl}")
                                 r = cur.fetchone()
                                 if r and r[0] and r[0] >0:
-                                    rows = int(r[0])
-                                    ts_min = int(r[1]) if r[1] else None
-                                    ts_max = int(r[2]) if r[2] else None
-                                    break
+                                    r_rows = int(r[0])
+                                    r_min = int(r[1]) if r[1] else None
+                                    r_max = int(r[2]) if r[2] else None
+                                    if r_rows >0 and r_min and r_max:
+                                        # compute span in days (handle seconds vs ms)
+                                        if r_max >1_000_000_000_000:
+                                            span_seconds = (r_max - r_min) /1000.0
+                                        else:
+                                            span_seconds = (r_max - r_min)
+                                        span_days_tbl = span_seconds /86400.0
+                                    else:
+                                        span_days_tbl =0.0
+                                    # prefer table with larger span or more rows
+                                    score = span_days_tbl *1000000 + r_rows
+                                    if score > best_span:
+                                        best_span = score
+                                        rows = r_rows
+                                        ts_min = r_min
+                                        ts_max = r_max
                             except Exception:
                                 continue
                         conn.close()
                         if rows >0 and ts_min and ts_max:
-                            span_days = (ts_max - ts_min) /1000.0 /86400.0
+                            # Detect whether timestamps are in milliseconds or seconds
+                            # If ts_max looks like milliseconds (>=1e12) treat as ms, else seconds
+                            if ts_max >1_000_000_000_000:
+                                span_seconds = (ts_max - ts_min) /1000.0
+                            else:
+                                span_seconds = (ts_max - ts_min)
+                            span_days = span_seconds /86400.0
                         else:
                             span_days =0.0
                         detail = {"path": p, "rows": rows, "span_days": round(span_days,2)}
@@ -301,7 +414,7 @@ class StrategyDiscoveryEngine:
 
         return results
 
-    async def run_backfill(self, symbol: str, timeframe: str, days: int =1460, db_path: str = None) -> bool:
+    async def run_backfill(self, symbol: str, timeframe: str, days: int =1460, db_path: str = None, exchange: str = None, since_ms: int = None) -> bool:
         """
         Run bitget_backfill.py as a subprocess to fetch historical candles for a symbol/timeframe.
         Returns True on success.
@@ -310,15 +423,25 @@ class StrategyDiscoveryEngine:
             sym_safe = symbol.replace('/', '_').replace(':', '_')
             if not db_path:
                 db_path = os.path.join('data', 'db', f"{sym_safe}_{timeframe}.db")
+            # determine exchange: prefer explicit, then config, default to binance
+            exchange_to_use = exchange or self.base_config.get('exchange') or 'binance'
+            # progress file per timeframe
+            progress_file = os.path.join('data', 'discovery', f'progress_backfill_{sym_safe}_{timeframe}.json')
+
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
             cmd = [
                 sys.executable, '-u', 'bitget_backfill.py',
                 '--symbol', symbol,
-                '--days', str(days),
                 '--timeframe', timeframe,
-                '--db', db_path
+                '--db', db_path,
+                '--exchange', exchange_to_use,
+                '--progress-file', progress_file
             ]
+            if since_ms:
+                cmd += ['--since', str(int(since_ms))]
+            else:
+                cmd += ['--days', str(days)]
 
             env = os.environ.copy()
             env['PYTHONPATH'] = PROJECT_ROOT + os.pathsep + env.get('PYTHONPATH', '')
@@ -343,7 +466,7 @@ class StrategyDiscoveryEngine:
                 print(err_text[:1000])
                 return False
 
-            print(f"[Discovery] Backfill finished for {symbol} {timeframe}. stdout snippet:\n{out_text[-1000:]}")
+            print(f"[Discovery] Backfill finished for {symbol} {timeframe} (exchange={exchange_to_use}). stdout snippet:\n{out_text[-1000:]}")
             return True
         except Exception as e:
             print(f"[Discovery] Exception while running backfill: {e}")
@@ -364,21 +487,159 @@ class StrategyDiscoveryEngine:
             print("[Discovery] Backfill OK - sufficient history present")
             return current
 
+        # If5m already has full coverage, prefer aggregating higher timeframes from5m
+        five_min_detail = current.get('details', {}).get('5m')
+        try:
+            five_min_span = float(five_min_detail.get('span_days',0.0)) if five_min_detail else 0.0
+        except Exception:
+            five_min_span =0.0
+
+        if five_min_span >= float(required_days):
+            print(f"[Discovery]5m has sufficient history ({five_min_span} days). Attempting to aggregate higher TFs from5m before backfill.")
+            for tf in timeframes:
+                if tf == '5m':
+                    continue
+                det = current.get('details', {}).get(tf, {})
+                if float(det.get('span_days',0.0)) >= float(required_days):
+                    continue
+                dbp = det.get('path') or os.path.join('data', 'db', f"{sanitize_symbol(self.base_config.get('symbol'))}_{tf}.db")
+                # Use the5m DB as the source for aggregation
+                five_min_db = five_min_detail.get('path') if five_min_detail and five_min_detail.get('path') else os.path.join('data', 'db', f"{sanitize_symbol(self.base_config.get('symbol'))}_5m.db")
+                agg_cmd = [
+                    sys.executable, 'tools/aggregate_timeframes.py',
+                    '--db', five_min_db,
+                    '--from-tf', '5m',
+                    '--to-tf', tf,
+                    '--since-ms', str(int(time.time() *1000) - int(required_days) *24 *3600 *1000)
+                ]
+                print(f"[Discovery] Aggregation will read from5m DB: {five_min_db} and produce {tf} table in that DB (or target DB if merged)")
+                try:
+                    print(f"[Discovery] Aggregating {tf} from5m into {dbp}")
+                    proc = await asyncio.create_subprocess_exec(*agg_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=PROJECT_ROOT)
+                    sout, serr = await proc.communicate()
+                    print(f"[Discovery] Aggregation stdout: {sout.decode('utf-8', errors='replace')[:500]}")
+                    if proc.returncode ==0:
+                        print(f"[Discovery] Aggregation succeeded for {tf}")
+                    else:
+                        print(f"[Discovery] Aggregation failed for {tf}: {serr.decode('utf-8', errors='replace')[:500]}")
+                except Exception as e:
+                    print(f"[Discovery] Aggregation exception for {tf}: {e}")
+
+        # re-verify after aggregation attempts
+        current = self.verify_backfill(required_days=required_days, timeframes=timeframes)
+        if current.get('ok'):
+            print("[Discovery] Backfill OK after aggregation")
+            return current
+
         # Otherwise try to backfill missing timeframes
         symbol = self.base_config.get('symbol')
         if not symbol:
             print("[Discovery] No symbol configured in config.yaml - cannot run backfill")
             return current
 
+        now_ms = int(time.time() *1000)
+        needed_start_ms = now_ms - int(required_days) *24 *3600 *1000
+        # sanitized symbol for filenames
+        try:
+         sym_safe = symbol.replace('/', '_').replace(':', '_')
+        except Exception:
+         sym_safe = 'unknown_symbol'
+
         for tf, detail in current.get('details', {}).items():
+            # marker file to avoid re-backfilling already-complete ranges
+            marker_dir = Path('data') / 'discovery' / 'markers'
+            marker_dir.mkdir(parents=True, exist_ok=True)
+            marker_file = marker_dir / f"backfill_{sym_safe}_{tf}.json"
+            # if marker exists and indicates coverage >= required_days, skip
+            try:
+                if marker_file.exists():
+                    m = json.loads(marker_file.read_text(encoding='utf-8'))
+                    if float(m.get('span_days',0.0)) >= float(required_days):
+                        print(f"[Discovery] Marker found for {tf} with span {m.get('span_days')} days — skipping backfill")
+                        continue
+            except Exception:
+                pass
+
             span = detail.get('span_days',0.0)
+            dbp = detail.get('path') or os.path.join('data', 'db', f"{sanitize_symbol(symbol)}_{tf}.db")
+            # Skip backfill if already has required span
             if span >= required_days:
+                print(f"[Discovery] Skipping {tf}: already has {span} days >= required {required_days} days")
                 continue
-            print(f"[Discovery] Missing data for {tf}: have {span} days, required {required_days} days. Attempting backfill...")
-            # Run backfill asking for full required_days (safer)
-            success = await self.run_backfill(symbol, tf, days=required_days, db_path=detail.get('path') or None)
+            
+            # If no rows at all, fetch full window starting at needed_start_ms
+            since_to_fetch = None
+            try:
+                import sqlite3
+                conn = sqlite3.connect(dbp)
+                cur = conn.cursor()
+                # check best table
+                tbl = f"candles_{tf.replace('m','min').replace('h','hr').replace('d','day')}"
+                try:
+                    r = cur.execute(f"SELECT MIN(ts), MAX(ts) FROM {tbl}").fetchone()
+                except Exception:
+                    r = cur.execute(f"SELECT MIN(ts), MAX(ts) FROM candles").fetchone()
+                conn.close()
+                if r and r[0] and r[1]:
+                    r_min, r_max = int(r[0]), int(r[1])
+                    # normalize to ms if stored as seconds
+                    if r_max <1_000_000_000_000:
+                        r_min_ms = r_min *1000
+                        r_max_ms = r_max *1000
+                    else:
+                        r_min_ms = r_min
+                        r_max_ms = r_max
+                    print(f"[Discovery][debug] {tf} DB range (ms): min={r_min_ms}, max={r_max_ms}")
+                    # If current DB doesn't cover needed_start_ms (missing older data), fetch from needed_start_ms
+                    if r_min_ms > needed_start_ms:
+                        since_to_fetch = needed_start_ms
+                    # If DB is missing recent data, fetch from r_max+1
+                    elif r_max_ms < now_ms:
+                        since_to_fetch = r_max_ms +1
+                    else:
+                        since_to_fetch = None
+                else:
+                    since_to_fetch = needed_start_ms
+            except Exception:
+                since_to_fetch = needed_start_ms
+
+            if since_to_fetch is None:
+                # already covered
+                continue
+            # clamp since_to_fetch to sensible range
+            since_to_fetch = max(needed_start_ms, int(since_to_fetch))
+            if since_to_fetch >= now_ms:
+                print(f"[Discovery] since_to_fetch {since_to_fetch} >= now ({now_ms}) — skipping {tf}")
+                continue
+            print(f"[Discovery] Missing data for {tf}: have {span} days, required {required_days} days. Attempting backfill from {since_to_fetch}...")
+            success = await self.run_backfill(symbol, tf, days=required_days, db_path=dbp, exchange=self.base_config.get('exchange'), since_ms=since_to_fetch)
             if not success:
                 print(f"[Discovery] Backfill attempt failed for {symbol} {tf}")
+                # fallback: try to aggregate from available5m candles
+                try:
+                    agg_cmd = [
+                        sys.executable,
+                        'tools/aggregate_timeframes.py',
+                        '--db', dbp,
+                        '--from-tf', '5m',
+                        '--to-tf', tf,
+                        '--since-ms', str(needed_start_ms)
+                    ]
+                    print(f"[Discovery] Attempting aggregation fallback for {tf} from5m")
+                    proc = await asyncio.create_subprocess_exec(
+                        *agg_cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=PROJECT_ROOT
+                    )
+                    sout, serr = await proc.communicate()
+                    print(f"[Discovery] Aggregation stdout: {sout.decode('utf-8', errors='replace')[:500]}")
+                    if proc.returncode ==0:
+                        print(f"[Discovery] Aggregation fallback succeeded for {tf}")
+                    else:
+                        print(f"[Discovery] Aggregation fallback failed for {tf}: {serr.decode('utf-8', errors='replace')[:500]}")
+                except Exception as e:
+                    print(f"[Discovery] Aggregation fallback exception: {e}")
             else:
                 print(f"[Discovery] Backfill attempt succeeded for {symbol} {tf}")
 
@@ -386,6 +647,16 @@ class StrategyDiscoveryEngine:
         final = self.verify_backfill(required_days=required_days, timeframes=timeframes)
         if final.get('ok'):
             print("[Discovery] Backfill completed and verified OK")
+            # write markers per timeframe
+            try:
+                details = final.get('details', {})
+                marker_dir = Path('data') / 'discovery' / 'markers'
+                marker_dir.mkdir(parents=True, exist_ok=True)
+                for tf, det in details.items():
+                    mf = marker_dir / f"backfill_{sym_safe}_{tf}.json"
+                    mf.write_text(json.dumps(det), encoding='utf-8')
+            except Exception:
+                pass
         else:
             print("[Discovery] Backfill incomplete - some timeframes still lack required history")
         return final
