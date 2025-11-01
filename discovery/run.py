@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test Strategy Discovery with Real Backtests
 
 This script runs the complete strategy discovery pipeline:
@@ -15,7 +15,7 @@ import asyncio
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from backend.agents.discovery.discovery_engine import StrategyDiscoveryEngine
+from backend.agents.discovery.discovery_engine from strategies import core as strategyDiscoveryEngine
 
 
 async def main():

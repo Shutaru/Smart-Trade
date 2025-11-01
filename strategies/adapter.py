@@ -1,4 +1,4 @@
-"""
+﻿"""
 Indicator Adapter - Bridge between features.py and strategy format
 
 Converts the existing indicator system to the format expected by the 38 strategies.
@@ -309,8 +309,8 @@ if __name__ == "__main__":
     print("""
 # In your backtest loop:
 
-from indicator_adapter import build_indicator_dict, build_bar_dict, build_state_dict
-from strategy_registry import get_strategy
+from strategies.adapter import build_indicator_dict, build_bar_dict, build_state_dict
+from strategies.registry import get_strategy
 
 # Get strategy
 strategy_fn = get_strategy("trendflow_supertrend")

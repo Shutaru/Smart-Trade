@@ -13,9 +13,9 @@ from typing import Dict, Optional, Any, Set
 from datetime import datetime
 from threading import Thread
 
-import db_sqlite
-from lab_objective import evaluate_objective
-from lab_schemas import StrategyConfig
+from core import database as db_sqlite
+from lab.objective import evaluate_objective
+from lab_schemas from strategies import core as strategyConfig
 
 # Global thread pool for async execution
 _executor: Optional[ThreadPoolExecutor] = None
@@ -146,7 +146,7 @@ def execute_backtest_task(run_id: str, config: StrategyConfig):
         log_run(run_id, "INFO", "Calculating indicators...", progress=0.3)
         
         # ✅ RUN REAL BACKTEST using production adapter
-        from lab_backtest_adapter import run_strategy_lab_backtest
+        from lab.adapter import run_strategy_lab_backtest
         
         log_run(run_id, "INFO", "Simulating trades...", progress=0.5)
       

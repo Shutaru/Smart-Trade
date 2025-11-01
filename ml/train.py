@@ -1,7 +1,7 @@
-import argparse, os, json, numpy as np, torch, torch.nn as nn, torch.optim as optim
+﻿import argparse, os, json, numpy as np, torch, torch.nn as nn, torch.optim as optim
 from sklearn.preprocessing import StandardScaler
-from ml_data import build_dataset
-from ml_model import MLP
+from ml.data import build_dataset
+from ml.model import MLP
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--days", type=int, default=1460)

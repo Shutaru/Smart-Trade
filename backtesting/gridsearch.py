@@ -1,6 +1,6 @@
-import argparse, os, time, json, itertools, random, csv, yaml
+﻿import argparse, os, time, json, itertools, random, csv, yaml
 from backtest import np, compute_feature_rows, PaperFuturesBroker, connect, load_range  # reuse imports via backtest
-from metrics import equity_metrics, trades_metrics
+from core.metrics import equity_metrics, trades_metrics
 
 def build_param_grid(cfg):
     tun = (cfg or {}).get('tuning', {})

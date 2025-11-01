@@ -1,8 +1,8 @@
-"""Check database contents and available data"""
+﻿"""Check database contents and available data"""
 
 import yaml
 import time
-from db_sqlite import connect
+from core.database import connect
 
 with open("config.yaml", "r") as f:
     cfg = yaml.safe_load(f)

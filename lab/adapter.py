@@ -1,4 +1,4 @@
-"""
+﻿"""
 Lab Backtest Adapter - Production backtest engine for Strategy Lab
 Connects Strategy Lab visual configurations to the existing backtest.py engine
 """
@@ -11,11 +11,11 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-import db_sqlite
-from lab_schemas import StrategyConfig, Condition, ConditionOperator, StrategySide
-from lab_features import calculate_features
-from broker_futures_paper import PaperFuturesBroker
-from metrics import equity_metrics, trades_metrics
+from core import database as db_sqlite
+from lab_schemas from strategies import core as strategyConfig, Condition, ConditionOperator, StrategySide
+from lab.features import calculate_features
+from broker.paper_v1 import PaperFuturesBroker
+from core.metrics import equity_metrics, trades_metrics
 
 
 class StrategyLabBacktestEngine:

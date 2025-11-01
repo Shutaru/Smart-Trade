@@ -11,7 +11,7 @@ import argparse
 import time
 import os
 import yaml
-from db_sqlite import connect, insert_candles_bulk
+from core.database import connect, insert_candles_bulk
 
 # Parse arguments
 ap = argparse.ArgumentParser(description="Fetch ETH/USDT data from Binance")

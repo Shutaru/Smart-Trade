@@ -1,13 +1,13 @@
-"""
+﻿"""
 Debug script to test why trend strategies are not generating trades
 """
 
 import yaml
 import time
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
-from strategy_registry import get_strategy, get_strategy_info
-from indicator_adapter import build_indicator_dict, build_bar_dict, build_state_dict
+from core.database import connect, load_range
+from core.features import compute_feature_rows
+from strategies.registry import get_strategy, get_strategy_info
+from strategies.adapter import build_indicator_dict, build_bar_dict, build_state_dict
 
 # Load config
 with open("config.yaml", "r") as f:

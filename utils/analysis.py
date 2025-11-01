@@ -1,12 +1,12 @@
-"""
+﻿"""
 Analyze BTC market conditions in the last 90 days
 Check if market was ranging (low ADX) or trending (high ADX)
 """
 
 import yaml
 import time
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
+from core.database import connect, load_range
+from core.features import compute_feature_rows
 
 # Load config
 with open("config.yaml", "r") as f:

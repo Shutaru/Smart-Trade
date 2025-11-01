@@ -9,7 +9,7 @@ import json
 import time
 import os
 from datetime import datetime
-from backend.agents.discovery.discovery_engine import StrategyDiscoveryEngine
+from backend.agents.discovery.discovery_engine from strategies import core as strategyDiscoveryEngine
 
 
 async def run_discovery_timeframe(timeframe: str, num_strategies: int = 38):

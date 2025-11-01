@@ -19,8 +19,8 @@ PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from backend.agents.discovery.strategy_catalog import StrategyCatalog, StrategyTemplate
-from backend.agents.discovery.ranker import StrategyRanker, StrategyMetrics
+from backend.agents.discovery.strategy_catalog from strategies import core as strategyCatalog, StrategyTemplate
+from backend.agents.discovery.ranker from strategies import core as strategyRanker, StrategyMetrics
 from backend.agents.discovery.entry_logic_builder import build_professional_entry_logic
 
 

@@ -1,13 +1,13 @@
-import argparse, time, os, json, csv, re, sys
+﻿import argparse, time, os, json, csv, re, sys
 import yaml
 import numpy as np
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
-from indicators import supertrend, keltner
-from broker_futures_paper import PaperFuturesBroker
-from sizing import compute_qty
-from strategy import should_enter, compute_exit_levels
-from metrics import equity_metrics, trades_metrics
+from core.database import connect, load_range
+from core.features import compute_feature_rows
+from core.indicators import supertrend, keltner
+from broker.paper_v1 import PaperFuturesBroker
+from core.sizing import compute_qty
+from strategies.core import should_enter, compute_exit_levels
+from core.metrics import equity_metrics, trades_metrics
 
 # Support compact argument form like `--days30` (user typed no space).
 # Transform sys.argv in-place for patterns like --nameVALUE -> --name VALUE
@@ -154,7 +154,7 @@ try:
         pv = tr.pivot_table(index='dow', columns='hour', values='pnl', aggfunc='sum', fill_value=0.0)
         z = pv.values.tolist(); xs = [int(c) for c in pv.columns.tolist()]; ys = [int(i) for i in pv.index.tolist()]
         html.append("<div id='heat' style='height:360px'></div>")
-        html.append(f"<script>Plotly.newPlot('heat',[{{z:{z},x:{xs},y:{ys},type:'heatmap',colorbar:{{title:'PnL'}}}}],{{title:'PnL Heatmap (DiaSemana×Hora)'}});</script>")
+        html.append(f"<script>Plotly.newPlot('heat',[{{z:{z},x:{xs},y:{ys},type:'heatmap',colorbar:{{title:'PnL'}}}}],{{title:'PnL Heatmap (DiaSemanaÃ—Hora)'}});</script>")
     html.append("</body></html>")
     open(os.path.join(outdir, "report.html"), "w", encoding="utf-8").write("\n".join(html))
 except Exception as _e:

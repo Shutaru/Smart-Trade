@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 from datetime import datetime, timedelta
-from strategy_optimizer import StrategyOptimizer, ParameterRange
+from strategy_optimizer from strategies import core as strategyOptimizer, ParameterRange
 import pandas as pd
 
 
@@ -287,7 +287,7 @@ async def main():
     """Main entry point"""
     import argparse
     import asyncio
-    from strategy_optimizer import DEFAULT_RANGES
+    from optimization.optimizer import DEFAULT_RANGES
     
     parser = argparse.ArgumentParser(description='Walk-forward validation')
     parser.add_argument('--strategy', type=str, required=True, help='Strategy name')

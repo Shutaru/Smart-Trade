@@ -1,4 +1,4 @@
-# gui_server.py
+﻿# gui_server.py
 import os
 import sys
 import time
@@ -141,7 +141,7 @@ def safe_path(p: str) -> str:
      raise HTTPException(400, "path vazio")
     full = os.path.abspath(os.path.join(PROJECT_ROOT, p))
     if not full.startswith(PROJECT_ROOT):
-      raise HTTPException(400, "path inválido")
+      raise HTTPException(400, "path invÃ¡lido")
     return full
 
 
@@ -166,7 +166,7 @@ def safe_path(p: str) -> str:
         raise HTTPException(400, "path vazio")
     full = os.path.abspath(os.path.join(PROJECT_ROOT, p))
     if not full.startswith(PROJECT_ROOT):
-        raise HTTPException(400, "path inválido")
+        raise HTTPException(400, "path invÃ¡lido")
     return full
 
 
@@ -257,7 +257,7 @@ _JOBS: Dict[str, Dict[str, Any]] = {}
 
 
 def launch(cmd: str, group: str = "misc", progress: Optional[str] = None) -> Dict[str, Any]:
-    """Lança um comando no SO como subprocesso"""
+    """LanÃ§a um comando no SO como subprocesso"""
     ts = str(int(time.time()))
     job_id = f"{group}_{ts}"
     popen = subprocess.Popen(cmd, shell=True, cwd=PROJECT_ROOT)
@@ -281,7 +281,7 @@ def api_jobs_list():
 def api_jobs_status(job_id: str):
     j = _JOBS.get(job_id)
     if not j:
-        raise HTTPException(404, "job não encontrado")
+        raise HTTPException(404, "job nÃ£o encontrado")
     status = {"running": True, "returncode": None}
     try:
         if j.get("progress") and os.path.exists(j["progress"]):
@@ -300,7 +300,7 @@ def api_jobs_status(job_id: str):
 def api_config_read():
     p = safe_path("config.yaml")
     if not os.path.exists(p):
-        raise HTTPException(404, "config.yaml não encontrado")
+        raise HTTPException(404, "config.yaml nÃ£o encontrado")
     return yaml.safe_load(open(p, "r", encoding="utf-8"))
 
 
@@ -338,13 +338,13 @@ def api_cfg_snapshots():
 def api_cfg_rollback(path: str):
     p = safe_path(path)
     if not os.path.exists(p):
-        raise HTTPException(404, "snapshot não encontrado")
+        raise HTTPException(404, "snapshot nÃ£o encontrado")
     import shutil
     shutil.copyfile(p, "config.yaml")
     return {"ok": True, "restored": path}
 
 
-# ============================= Execuções ===============================
+# ============================= ExecuÃ§Ãµes ===============================
 
 @app.post("/api/backtest/run")
 def api_backtest_run(days: int = 365):
@@ -392,7 +392,7 @@ def api_grid_pareto(base_path: str):
     p = safe_path(base_path)
     fn = os.path.join(p, "grid_results.csv")
     if not os.path.exists(fn):
-        raise HTTPException(404, "grid_results.csv não encontrado")
+        raise HTTPException(404, "grid_results.csv nÃ£o encontrado")
     df = pd.read_csv(fn)
     df = df.dropna(subset=["sharpe_ann", "maxdd_pct"])
     pts = [{
@@ -409,10 +409,10 @@ def api_grid_apply_best(base_path: str, metric: str = "sharpe_ann", ascending: i
     p = safe_path(base_path)
     fn = os.path.join(p, "grid_results.csv")
     if not os.path.exists(fn):
-        raise HTTPException(404, "grid_results.csv não encontrado")
+        raise HTTPException(404, "grid_results.csv nÃ£o encontrado")
     df = pd.read_csv(fn)
     if metric not in df.columns:
-        raise HTTPException(400, "métrica inválida")
+        raise HTTPException(400, "mÃ©trica invÃ¡lida")
     df2 = df.sort_values(by=metric, ascending=bool(ascending)).head(1)
     if len(df2) == 0:
         raise HTTPException(400, "sem linhas")
@@ -443,7 +443,7 @@ def api_grid_apply_objective(base_path: str, days: int = 365,
     p = safe_path(base_path)
     fn = os.path.join(p, "grid_results.csv")
     if not os.path.exists(fn):
-        raise HTTPException(404, "grid_results.csv não encontrado")
+        raise HTTPException(404, "grid_results.csv nÃ£o encontrado")
     df = pd.read_csv(fn)
     if "trades" not in df.columns:
         df["trades"] = 0
@@ -462,7 +462,7 @@ def api_grid_apply_objective(base_path: str, days: int = 365,
     df2["objective"] = scores
     df2 = df2.replace([np.inf, -np.inf], np.nan).dropna(subset=["objective"]).sort_values(by="objective", ascending=False)
     if len(df2) == 0:
-        raise HTTPException(400, "sem candidatos após filtros")
+        raise HTTPException(400, "sem candidatos apÃ³s filtros")
     best = df2.iloc[0].to_dict()
     cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
     risk = cfg.get("risk", {})
@@ -561,7 +561,7 @@ def api_profile_apply(path: str):
 def api_profile_import_text(text: str = Body(..., embed=True)):
     obj = yaml.safe_load(text)
     if not isinstance(obj, dict) or "config" not in obj:
-        raise HTTPException(400, "Conteúdo inválido.")
+        raise HTTPException(400, "ConteÃºdo invÃ¡lido.")
     stamp = int(time.time())
     os.makedirs("data/profiles", exist_ok=True)
     path = os.path.join("data/profiles", f"profile_import_{stamp}.yaml")
@@ -801,16 +801,16 @@ async def get_paper_status():
     return status
 
 
-# === OHLCV do DB para o gráfico (candles) ===
+# === OHLCV do DB para o grÃ¡fico (candles) ===
 @app.get("/api/candles")
 def api_candles(limit: int = 500, timeframe: str = "5m"):
     import sqlite3
     cfg = yaml.safe_load(open("config.yaml", "r", encoding="utf-8"))
     dbp = cfg.get("db", {}).get("path")
     if not dbp:
-        raise HTTPException(400, "db.path não definido no config.yaml")
+        raise HTTPException(400, "db.path nÃ£o definido no config.yaml")
     if not os.path.exists(dbp):
-        raise HTTPException(404, f"Base de dados não existe: {dbp}")
+        raise HTTPException(404, f"Base de dados nÃ£o existe: {dbp}")
 
     conn = sqlite3.connect(dbp)
     cur = conn.cursor()
@@ -823,7 +823,7 @@ def api_candles(limit: int = 500, timeframe: str = "5m"):
     return {"symbol": cfg.get("symbol"), "timeframe": timeframe, "candles": candles}
 
 
-# ============================= WS de preço ==============================
+# ============================= WS de preÃ§o ==============================
 
 class PriceStreamer:
     def __init__(self):
@@ -894,7 +894,7 @@ async def ws_lab_run(websocket: WebSocket, run_id: str):
     """WebSocket endpoint for real-time run progress and logs"""
     await websocket.accept()
     
-    from lab_runner import subscribe_ws, unsubscribe_ws, get_run_status
+    from lab.runner import subscribe_ws, unsubscribe_ws, get_run_status
     
     status = get_run_status(run_id)
     if not status:
@@ -984,7 +984,7 @@ async def spa_catch_all(full_path: str):
 @app.on_event("startup")
 async def startup_event():
     """Set the main event loop for lab_runner WebSocket broadcasting"""
-    from lab_runner import set_main_loop
+    from lab.runner import set_main_loop
     loop = asyncio.get_event_loop()
     set_main_loop(loop)
     
@@ -995,12 +995,12 @@ async def startup_event():
     if DIST.exists():
         index_path = DIST / "index.html"
         if index_path.exists():
-            print(f"[Startup] ✅ React SPA ready to serve")
+            print(f"[Startup] âœ… React SPA ready to serve")
             print(f"[Startup] Access at: http://localhost:8000")
         else:
-            print(f"[Startup] ⚠️  index.html not found in dist/")
+            print(f"[Startup] âš ï¸  index.html not found in dist/")
     else:
-        print(f"[Startup] ⚠️  React SPA not built")
+        print(f"[Startup] âš ï¸  React SPA not built")
         print(f"[Startup] Run: cd webapp && npm run build")
 
 @app.get("/api/agent/llm/stats")

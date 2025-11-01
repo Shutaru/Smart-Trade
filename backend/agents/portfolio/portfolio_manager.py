@@ -12,7 +12,7 @@ Core portfolio management system that:
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import time
-from backend.agents.discovery.ranker import StrategyMetrics
+from backend.agents.discovery.ranker from strategies import core as strategyMetrics
 
 
 @dataclass
@@ -324,8 +324,8 @@ class MultiStrategyPortfolio:
 
 if __name__ == '__main__':
     # Test portfolio manager
-    from backend.agents.discovery.ranker import StrategyMetrics
-    from backend.agents.portfolio.strategy_selector import StrategySelector
+    from backend.agents.discovery.ranker from strategies import core as strategyMetrics
+    from backend.agents.portfolio.strategy_selector from strategies import core as strategySelector
     
     # Create sample strategies
     strategies_list = [

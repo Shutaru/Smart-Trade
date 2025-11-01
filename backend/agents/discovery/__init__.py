@@ -1,4 +1,4 @@
-"""
+﻿"""
 Strategy Discovery Engine
 
 Automatically discovers and ranks trading strategies using:
@@ -7,8 +7,8 @@ Automatically discovers and ranks trading strategies using:
 - Advanced ranking formula (Calmar, Sortino, Stability)
 """
 
-from .strategy_catalog import StrategyCatalog
-from .discovery_engine import StrategyDiscoveryEngine
-from .ranker import StrategyRanker
+from .strategy_catalog from strategies import core as strategyCatalog
+from .discovery_engine from strategies import core as strategyDiscoveryEngine
+from .ranker from strategies import core as strategyRanker
 
 __all__ = ['StrategyCatalog', 'StrategyDiscoveryEngine', 'StrategyRanker']

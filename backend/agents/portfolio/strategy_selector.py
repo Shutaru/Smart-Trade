@@ -5,7 +5,7 @@ Selects top N strategies from discovery results based on composite scores.
 """
 
 from typing import List, Dict, Any
-from backend.agents.discovery.ranker import StrategyMetrics
+from backend.agents.discovery.ranker from strategies import core as strategyMetrics
 
 
 class StrategySelector:
@@ -189,7 +189,7 @@ class StrategySelector:
 
 if __name__ == '__main__':
     # Test strategy selector
-    from backend.agents.discovery.ranker import StrategyRanker, StrategyMetrics
+    from backend.agents.discovery.ranker from strategies import core as strategyRanker, StrategyMetrics
     
     # Create sample strategies
     strategies = [

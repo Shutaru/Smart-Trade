@@ -11,7 +11,7 @@ import time
 import os
 from pathlib import Path
 from typing import List, Dict, Any
-from strategy_optimizer import StrategyOptimizer, ParameterRange, DEFAULT_RANGES
+from strategy_optimizer from strategies import core as strategyOptimizer, ParameterRange, DEFAULT_RANGES
 
 
 def get_parameter_ranges_for_strategy(strategy_name: str) -> List[ParameterRange]:

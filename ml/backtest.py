@@ -1,12 +1,12 @@
-import argparse, os, time, json, numpy as np, pandas as pd, torch
+﻿import argparse, os, time, json, numpy as np, pandas as pd, torch
 from sklearn.preprocessing import StandardScaler
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
-from broker_futures_paper import PaperFuturesBroker
-from indicators import supertrend, keltner
-from strategy import compute_exit_levels
-from sizing import compute_qty
-from ml_model import MLP
+from core.database import connect, load_range
+from core.features import compute_feature_rows
+from broker.paper_v1 import PaperFuturesBroker
+from core.indicators import supertrend, keltner
+from strategies.core import compute_exit_levels
+from core.sizing import compute_qty
+from ml.model import MLP
 
 def load_model(model_dir="data/ml"):
     import joblib, json
@@ -100,7 +100,7 @@ for i, fr in enumerate(feat_rows):
         sl_mult, tp_rr = args.sl_atr, args.tp_rr
         if side=="LONG": sl = close - sl_mult*(atr14 or close*0.01); R = close - sl; tp = close + tp_rr*R
         else:            sl = close + sl_mult*(atr14 or close*0.01); R = sl - close; tp = close - tp_rr*R
-        from sizing import compute_qty
+        from core.sizing import compute_qty
         sizing = cfg.get('sizing',{}).copy()
         if args.size_mode: sizing['mode']=args.size_mode
         if args.usd is not None: sizing['usd']=args.usd
@@ -114,7 +114,7 @@ for i, fr in enumerate(feat_rows):
             elif (risk.get('sl_tp_style') or '').lower()=='keltner': trail_style='keltner'
             broker.open(ts[i], side, qty, close, sl, tp, abs(close-sl), cfg.get('sizing',{}).get('leverage',3), args.spread_bps, args.taker_bps, note_extra=f"pL={pL:.2f} pS={pS:.2f}", trailing_style=trail_style, trail_atr_mult=extra.get('trail_atr_mult'), breakeven_at_R=extra.get('breakeven_at_R'))
 
-from metrics import equity_metrics, trades_metrics
+from core.metrics import equity_metrics, trades_metrics
 em = equity_metrics(broker.equity_curve)
 tm = trades_metrics(os.path.join("data/ml_bt","trades.csv"))
 summary = {**em, **tm}

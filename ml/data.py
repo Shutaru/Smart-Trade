@@ -1,6 +1,6 @@
-import time, numpy as np, pandas as pd
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
+﻿import time, numpy as np, pandas as pd
+from core.database import connect, load_range
+from core.features import compute_feature_rows
 
 def build_dataset(db_path, days=1460, horizon=12, fee_bps=5.0):
     now = int(time.time()); start = now - days*24*60*60

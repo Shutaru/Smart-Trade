@@ -15,7 +15,7 @@ Provides unified access to:
 Total: 38 professional trading strategies
 
 Usage:
-    from strategy_registry import ALL_STRATEGIES, get_strategy, list_all_strategies
+    from strategies.registry import ALL_STRATEGIES, get_strategy, list_all_strategies
     
     # Get specific strategy
     strategy_fn = get_strategy("trendflow_supertrend")
@@ -39,14 +39,14 @@ from typing import Dict, Callable, Optional, List, Any
 import logging
 
 # Import all strategy modules
-from strategies_trend_following import TREND_FOLLOWING_STRATEGIES
-from strategies_mean_reversion import MEAN_REVERSION_STRATEGIES
-from strategies_breakout import BREAKOUT_STRATEGIES
-from strategies_volume import VOLUME_STRATEGIES
-from strategies_hybrid import HYBRID_STRATEGIES
-from strategies_advanced import ADVANCED_STRATEGIES
-from strategies_refinements import REFINEMENT_STRATEGIES
-from strategies_final import FINAL_STRATEGIES
+from strategies.trend_following import TREND_FOLLOWING_STRATEGIES
+from strategies.mean_reversion import MEAN_REVERSION_STRATEGIES
+from strategies.breakout import BREAKOUT_STRATEGIES
+from strategies.volume import VOLUME_STRATEGIES
+from strategies.hybrid import HYBRID_STRATEGIES
+from strategies.advanced import ADVANCED_STRATEGIES
+from strategies.refinements import REFINEMENT_STRATEGIES
+from strategies.final import FINAL_STRATEGIES
 
 logger = logging.getLogger(__name__)
 

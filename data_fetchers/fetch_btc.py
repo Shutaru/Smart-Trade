@@ -1,5 +1,5 @@
-import ccxt, argparse, time, os, json
-from db_sqlite import connect, insert_candles
+﻿import ccxt, argparse, time, os, json
+from core.database import connect, insert_candles
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--symbol", type=str, required=True)       # e.g. BTC/USDT:USDT or BTC/USDT
