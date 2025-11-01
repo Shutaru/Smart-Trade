@@ -7,6 +7,7 @@ bitget:
 db:
   path: data\db\ETH_USDT_5m.db
 exchange: binance
+strategy: bollinger_mean_reversion
 fees:
   maker_fee_bps: 2
   spread_bps: 1
@@ -22,10 +23,15 @@ ml:
 mode: paper
 risk:
   allow_shorts: true
-  bb_period: 30
-  bb_std: 1.75
   breakeven_at_R: 1.0
-  breakeven_r: 0.75
+  sl_atr_mult: 2.2
+  sl_tp_style: keltner
+  trail_atr_mult: 2.0
+  tp_rr_multiple: 2.0
+  time_stop_bars: 96
+  keltner_mult: 1.5
+  max_daily_loss_pct: 2
+  partial_tp_at_R: 1
   entry:
     long:
       entry_all:
@@ -51,26 +57,12 @@ risk:
       - indicator: close
         op: crosses_below
         rhs_indicator: up55
-  keltner_mult: 1.5
-  max_daily_loss_pct: 2
-  partial_tp_at_R: 1
-  rsi_overbought: 85
-  rsi_oversold: 15
-  rsi_period: 22
-  sl_atr_mult: 2.2
-  sl_rr_ratio: 1.25
-  sl_tp_style: keltner
-  time_stop_bars: 120
-  tp_rr_multiple: 2.0
-  tp_rr_ratio: 2.0
-  trail_atr_mult: 2.0
 sizing:
   leverage: 3
   max_margin_util_pct: 80
   mode: usd
   portfolio_pct: 1
   usd: 1000
-strategy: bollinger_mean_reversion
 symbol: ETH/USDT
 timeframe: 5m
 tuning:

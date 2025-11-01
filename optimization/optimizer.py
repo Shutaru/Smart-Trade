@@ -147,10 +147,11 @@ class StrategyOptimizer:
             with open(original_config_path, 'w') as f:
                 yaml.safe_dump(temp_config, f)
             
-            # Run backtest using wrapper
+            # Run backtest using optimization engine
             cmd = [
                 sys.executable,
-                'run_single_backtest.py',
+                'optimization/backtest_engine.py',
+                '--config', str(original_config_path),
                 '--days', str(days)
             ]
             
