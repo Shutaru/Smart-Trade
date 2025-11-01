@@ -4,14 +4,16 @@ from typing import List
 import os
 import json
 import time
-import db_sqlite
-from lab_schemas import (
+from core import database as db_sqlite
+from lab.schemas import (
     ExchangeListResponse, SymbolListResponse, IndicatorCatalogResponse,
     RunResponse, RunStatus, StrategyConfig, ValidateStrategyResponse,
     BackfillRequest, BackfillResponse, BackfillResult,
     RunResultsResponse, TrialResult
 )
-from lab_indicators import get_indicator_catalog, get_indicator, validate_indicator_params
+from lab.indicators import get_indicator_catalog, get_indicator, validate_indicator_params
+from lab.objective import objective_evaluator
+from lab.features import calculate_features, features_to_rows
 
 router = APIRouter(prefix="/api/lab", tags=["lab"])
 
@@ -92,8 +94,6 @@ async def get_indicator_operators_endpoint(indicator_id: str):
 @router.post("/strategy/validate", response_model=ValidateStrategyResponse)
 async def validate_strategy(config: StrategyConfig):
     """Validate strategy configuration"""
-    from lab_objective import objective_evaluator
-    
     errors = []
     features_required = set()
     

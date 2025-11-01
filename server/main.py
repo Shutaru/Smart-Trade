@@ -1,11 +1,20 @@
 ﻿# gui_server.py
 import os
 import sys
+
+# Add parent directory to path (so we can import from backend/, routers/, etc)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
+
+# NOW the imports will work
 import time
 import json
 import yaml
 import asyncio
 import subprocess
+from typing import Dict, Any, Optional
+from backend.agents.service import agent_service
+# ... resto dos imports
 from typing import Dict, Any, Optional
 from backend.agents.service import agent_service
 
@@ -21,6 +30,10 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # Registrar router do Strategy Lab
 from routers.lab import router as lab_router
 app.include_router(lab_router)
+
+# Registrar router do Orchestrator (NOVO!)
+from routers.orchestrator import router as orchestrator_router
+app.include_router(orchestrator_router)
 
 # ============================================================================
 # AGENT CONTROL API

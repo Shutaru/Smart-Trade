@@ -671,4 +671,54 @@ def start_dynamic_optimization_run(
     Start dynamic parameter optimization run asynchronously
     
     Args:
-        strategy_name: Name of strategy 
+        strategy_name: Name of strategy (e.g., 'bollinger_mean_reversion')
+        exchange: Exchange name
+        symbol: Trading symbol
+        timeframe: Candle timeframe
+        days: Days of historical data
+        n_trials: Number of optimization trials
+ 
+    Returns:
+        run_id for tracking progress
+    """
+    run_id = generate_run_id()
+ 
+    # Create run in database
+    conn = db_sqlite.connect_lab()
+    
+    config_dict = {
+        'type': 'dynamic_optimization',
+        'strategy': strategy_name,
+        'exchange': exchange,
+        'symbol': symbol,
+        'timeframe': timeframe,
+        'days': days,
+        'n_trials': n_trials
+    }
+    
+    db_sqlite.create_run(
+        conn,
+        run_id=run_id,
+        name=f"{strategy_name} - Dynamic Opt",
+        mode="dynamic_optimization",
+        config=config_dict
+    )
+    conn.close()
+    
+    # Start optimization in background thread
+    executor = get_executor()
+    future = executor.submit(
+        execute_dynamic_optimization_task,
+        run_id,
+        strategy_name,
+        exchange,
+        symbol,
+        timeframe,
+        days,
+        n_trials
+    )
+    _active_runs[run_id] = future
+ 
+    log_run(run_id, "INFO", f"Dynamic optimization created and queued: {strategy_name}", progress=0.0)
+    
+    return run_id
