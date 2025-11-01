@@ -220,41 +220,46 @@ class StrategyOptimizer:
         for key, value in metrics.items():
             trial.set_user_attr(key, value)
         
-        # Apply PROFIT-FIRST scoring (same as ranker.py)
-        # Constraints
-        if metrics.get('trades', 0) < 10:
+        # Apply PROFIT-FIRST scoring v5 (ALIGNED WITH RANKER.PY)
+        # Constraints (only 2 - same as discovery engine):
+        # 1. Minimum trades for statistical significance
+        # 2. Maximum drawdown for risk control
+        # NO Sharpe constraint - let profitable strategies through!
+        
+        if metrics.get('trades', 0) < 5:  # Relaxed from 10 to 5
             return -999.0
         if abs(metrics.get('max_dd', 0)) > 50:
             return -999.0
-        if metrics.get('sharpe', 0) < 1.2:
-            return -999.0
         
-        # Components
+        # NO SHARPE CONSTRAINT!
+        # High return with low Sharpe (0.3-0.8) is common in crypto
+        # We score it but don't reject it
+        
+        # Components (aligned with ranker.py PROFIT-FIRST v5)
         ret = metrics.get('return', 0)
+        sharpe = metrics.get('sharpe', 0)
         sortino = metrics.get('sortino', metrics.get('sharpe', 0) * 1.2)
         win_rate = metrics.get('win_rate', 0)
-        trades = metrics.get('trades', 0)
-        dd = abs(metrics.get('max_dd', 0))
         
-        # Calculate score
-        return_component = 0.70 * ret
-        sortino_component = 0.10 * min(sortino, 8.0)
-        win_rate_component = 0.10 * (win_rate / 100.0) * 10.0
-        trade_component = 0.05 * min(trades / 1000.0, 3.0)
+        # Calculate score (95-2.5-1.25-1.25 split)
+        # 1. RETURN (95 points max) - KING! NO PENALTY!
+        return_component = 0.95 * ret
         
-        # DD penalty (only if > 15%)
-        if dd <= 15.0:
-            dd_penalty = 0.0
-        else:
-            excess_dd = dd - 15.0
-            dd_penalty = -0.05 * (excess_dd / 10.0)
+        # 2. SHARPE (2.5 points max) - Plateau at 2.0
+        sharpe_normalized = max(0.0, min(sharpe / 2.0, 1.0))
+        sharpe_component = 2.5 * sharpe_normalized
         
+        # 3. SORTINO (1.25 points max)
+        sortino_component = 1.25 * min(sortino / 8.0, 1.0)
+    
+        # 4. WIN RATE (1.25 points max)
+        win_rate_component = 1.25 * (win_rate / 100.0)
+    
         score = (
             return_component +
+            sharpe_component +
             sortino_component +
-            win_rate_component +
-            trade_component +
-            dd_penalty
+            win_rate_component
         )
         
         return score
