@@ -22,7 +22,7 @@ class SmartTradeInterface:
         
     def discovery(self, symbol='BTC/USDT:USDT', exchange='binance', timeframe='5m', strategies=10, parallel=2):
         """Run strategy discovery engine"""
-        print(f"\n🔍 DISCOVERY MODE")
+        print(f"\n[DISCOVERY MODE]")
         print(f"Symbol: {symbol} | Exchange: {exchange} | Timeframe: {timeframe}")
         print(f"Testing {strategies} strategies with {parallel} parallel jobs\n")
         
@@ -33,7 +33,7 @@ class SmartTradeInterface:
     def optimize(self, strategy, symbol='BTC/USDT:USDT', exchange='binance', timeframe='5m', 
                  trials=50, days=365, parallel=1):
         """Optimize strategy parameters"""
-        print(f"\n⚙️  OPTIMIZATION MODE")
+        print(f"\n[OPTIMIZATION MODE]")
         print(f"Strategy: {strategy}")
         print(f"Symbol: {symbol} | Exchange: {exchange} | Timeframe: {timeframe}")
         print(f"Trials: {trials} | Days: {days}\n")
@@ -45,7 +45,7 @@ class SmartTradeInterface:
     
     def backtest(self, strategies='all', symbol=None, timeframe=None, days=90):
         """Run backtest for strategies"""
-        print(f"\n📊 BACKTEST MODE")
+        print(f"\n[BACKTEST MODE]")
         print(f"Strategies: {strategies} | Days: {days}\n")
         
         cmd = [sys.executable, 'run_backtest.py', '--days', str(days), '--strategies', strategies]
@@ -53,7 +53,7 @@ class SmartTradeInterface:
     
     def validate(self, symbol='BTC/USDT:USDT', exchange='binance', timeframe='5m', days=1460, trials=50):
         """Run complete validation pipeline"""
-        print(f"\n✅ VALIDATION PIPELINE")
+        print(f"\n[VALIDATION PIPELINE]")
         print(f"Symbol: {symbol} | Exchange: {exchange} | Timeframe: {timeframe}")
         print(f"Period: {days} days (~{days/365:.1f} years) | Trials: {trials}\n")
         
@@ -63,8 +63,8 @@ class SmartTradeInterface:
     
     def live(self, mode='paper', strategy=None):
         """Start live trading (FUTURE)"""
-        print(f"\n🔴 LIVE TRADING MODE: {mode}")
-        print("⚠️  Not yet implemented\n")
+        print(f"\n[LIVE TRADING MODE]: {mode}")
+        print("WARNING: Not yet implemented\n")
         return 1
 
 
