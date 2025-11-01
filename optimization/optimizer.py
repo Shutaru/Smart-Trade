@@ -1,6 +1,8 @@
 ﻿"""
 Strategy Optimizer - Optuna-based Parameter Optimization
 
+NEW: Multi-Symbol & Multi-Timeframe Support!
+
 Optimizes strategy parameters using Bayesian optimization (Optuna).
 Uses PROFIT-FIRST scoring (same as discovery engine).
 """
@@ -12,6 +14,7 @@ import json
 import yaml
 import time
 import os
+import argparse
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
@@ -33,17 +36,23 @@ class StrategyOptimizer:
     """
     Optimize strategy parameters using Optuna
     
+    NEW: Now supports dynamic symbol, exchange, and timeframe!
+    
     Features:
     - Bayesian optimization (TPE sampler)
     - PROFIT-FIRST scoring (70% return, 10% Sortino, constraints)
     - Comprehensive parameter ranges for all indicators
     - Parallel trials support
+    - Multi-symbol/timeframe support
     """
     
     def __init__(
         self,
         strategy_name: str,
         base_config_path: str = "config.yaml",
+        symbol: str = None,
+        exchange: str = None,
+        timeframe: str = None,
         param_ranges: List[ParameterRange] = None,
         n_trials: int = 50,
         study_name: Optional[str] = None,
@@ -58,18 +67,36 @@ class StrategyOptimizer:
         with open(base_config_path, 'r') as f:
             self.base_config = yaml.safe_load(f)
         
+        # Override with provided parameters
+        if symbol:
+            self.base_config['symbol'] = symbol
+        if exchange:
+            self.base_config['exchange'] = exchange
+        if timeframe:
+            self.base_config['timeframe'] = timeframe
+        
+        # Store current configuration
+        self.symbol = self.base_config.get('symbol', 'BTC/USDT:USDT')
+        self.exchange = self.base_config.get('exchange', 'binance')
+        self.timeframe = self.base_config.get('timeframe', '5m')
+        
         # Setup Optuna study
-        self.study_name = study_name or f"opt_{strategy_name}_{int(time.time())}"
+        sym_safe = self.symbol.replace('/', '_').replace(':', '_')
+        self.study_name = study_name or f"opt_{strategy_name}_{sym_safe}_{self.timeframe}_{int(time.time())}"
         self.storage = storage or f"sqlite:///data/optimization/{self.study_name}.db"
         
         # Create output directory
         self.output_dir = Path("data") / "optimization" / self.study_name
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        print(f"[Optimizer] Initialized for strategy: {strategy_name}")
-        print(f"[Optimizer] Study: {self.study_name}")
-        print(f"[Optimizer] Objective: PROFIT-FIRST scoring (70% return, 10% Sortino, constraints)")
-        print(f"[Optimizer] Trials: {n_trials}")
+        print(f"[Optimizer] Initialized:")
+        print(f"  Strategy: {strategy_name}")
+        print(f"  Symbol: {self.symbol}")
+        print(f"  Exchange: {self.exchange}")
+        print(f"  Timeframe: {self.timeframe}")
+        print(f"  Study: {self.study_name}")
+        print(f"  Objective: PROFIT-FIRST scoring (70% return, 10% Sortino, constraints)")
+        print(f"  Trials: {n_trials}")
     
     def _suggest_parameter(self, trial: optuna.Trial, param: ParameterRange) -> Any:
         """Suggest parameter value for trial"""
