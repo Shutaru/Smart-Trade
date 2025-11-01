@@ -758,3 +758,66 @@ async def compare_runs(run_ids: List[str]):
         })
     
     return {'runs': comparison_data}
+
+# ============================================================================
+# DYNAMIC OPTIMIZATION ENDPOINTS (NEW SYSTEM)
+# ============================================================================
+
+@router.post("/run/optimize-dynamic", response_model=RunResponse)
+async def run_dynamic_optimization(
+    strategy_name: str,
+    exchange: str = 'bitget',
+    symbol: str = 'BTC/USDT:USDT',
+    timeframe: str = '5m',
+    days: int = 90,
+    n_trials: int = 50
+):
+    """
+    Start dynamic parameter optimization
+    
+    Uses new system with auto-fetch, parameter auto-detection, etc.
+    """
+    from lab_runner import start_dynamic_optimization_run
+    
+    try:
+        run_id = start_dynamic_optimization_run(
+            strategy_name=strategy_name,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days,
+            n_trials=n_trials
+        )
+        
+        return RunResponse(run_id=run_id, status="pending")
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to start dynamic optimization: {str(e)}")
+
+
+@router.get("/strategies-dynamic")
+async def get_strategies_dynamic():
+    """Get list of all 38 strategies with metadata"""
+    from strategies.registry import ALL_STRATEGIES, STRATEGY_METADATA
+    
+    result = []
+    for name in ALL_STRATEGIES.keys():
+        metadata = STRATEGY_METADATA.get(name, {})
+        result.append({
+            "name": name,
+            "id": metadata.get("id", 0),
+            "category": metadata.get("category", "unknown"),
+            "description": metadata.get("description", ""),
+            "indicators": metadata.get("indicators", []),
+            "regime": metadata.get("regime", "unknown"),
+            "complexity": metadata.get("complexity", "medium"),
+            "risk_reward": metadata.get("risk_reward", "1:2"),
+            "win_rate_range": metadata.get("win_rate_range", "40-50%"),
+        })
+    
+    # Sort by ID
+    result.sort(key=lambda x: x['id'])
+    
+    return {"strategies": result, "total": len(result)}

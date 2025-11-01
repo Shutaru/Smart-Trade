@@ -15,7 +15,7 @@ from threading import Thread
 
 from core import database as db_sqlite
 from lab.objective import evaluate_objective
-from lab_schemas from strategies import core as strategyConfig
+from lab.schemas import StrategyConfig
 
 # Global thread pool for async execution
 _executor: Optional[ThreadPoolExecutor] = None
@@ -478,3 +478,197 @@ def start_optuna_run(config: StrategyConfig, n_trials: int = 100) -> str:
 
 import atexit
 atexit.register(shutdown_executor)
+
+# ============================================================================
+# DYNAMIC OPTIMIZATION (NEW SYSTEM - INTEGRATED)
+# ============================================================================
+
+def execute_dynamic_optimization_task(
+    run_id: str,
+    strategy_name: str,
+    exchange: str,
+    symbol: str,
+    timeframe: str,
+    days: int,
+    n_trials: int
+):
+    """
+    Execute dynamic parameter optimization task in background thread
+    
+    Uses new system:
+    - Auto-fetch from exchange if data missing
+    - Auto-detection of required parameters
+    - PROFIT-FIRST v5 objective
+    - Dynamic indicator calculation with caching
+    """
+    conn = db_sqlite.connect_lab()
+    
+    try:
+        db_sqlite.update_run_status(conn, run_id, "running", started_at=int(time.time()))
+        log_run(run_id, "INFO", f"Starting dynamic optimization for strategy: {strategy_name}", progress=0.0)
+        log_run(run_id, "INFO", f"Symbol: {symbol} | Timeframe: {timeframe} | Days: {days}", progress=0.05)
+        
+        # Import new system modules
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        from optimization.optimizer_dynamic import DynamicOptimizer
+        from optimization.backtest_with_params import run_backtest_with_params
+        from core.data_loader import load_data
+        
+        # Load data (with auto-fetch)
+        log_run(run_id, "INFO", "Loading market data (auto-fetch if needed)...", progress=0.1)
+        
+        df, metadata = load_data(
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days,
+            auto_fetch=True
+        )
+        
+        source = metadata['source'].upper()
+        log_run(run_id, "INFO", f"Loaded {len(df)} candles from {source}", progress=0.15)
+        
+        # Create optimizer
+        log_run(run_id, "INFO", f"Initializing optimizer with {n_trials} trials...", progress=0.2)
+        
+        optimizer = DynamicOptimizer(
+            strategy_name=strategy_name,
+            df=df,
+            n_trials=n_trials,
+            use_cache=True
+        )
+        
+        log_run(run_id, "INFO", f"Optimizing {len(optimizer.param_ranges)} parameters...", progress=0.25)
+        
+        # Custom callback for progress tracking
+        best_score = float('-inf')
+        
+        def trial_callback(study, trial):
+            """Called after each trial"""
+            nonlocal best_score
+            
+            completed = len(study.trials)
+            progress = 0.25 + (completed / n_trials) * 0.65  # 25% to 90%
+            
+            # Update best score
+            if study.best_value > best_score:
+                best_score = study.best_value
+            
+            # Save trial to database
+            try:
+                metrics = {
+                    'total_profit': trial.user_attrs.get('total_profit', 0),
+                    'sharpe': trial.user_attrs.get('sharpe', 0),
+                    'max_dd': trial.user_attrs.get('max_dd', 0),
+                    'trades': trial.user_attrs.get('trades', 0),
+                    'win_rate': trial.user_attrs.get('win_rate', 0)
+                }
+                
+                db_sqlite.insert_trial(
+                    conn,
+                    run_id=run_id,
+                    trial_number=completed,
+                    params=trial.params,
+                    metrics=metrics,
+                    score=trial.value
+                )
+                
+            except Exception as e:
+                print(f"[Dynamic Opt] Error saving trial: {e}")
+            
+            # Log progress every 10 trials
+            if completed % 10 == 0 or completed == n_trials:
+                log_run(
+                    run_id,
+                    "INFO",
+                    f"Completed {completed}/{n_trials} trials (best: {best_score:.2f})",
+                    progress=progress,
+                    best_score=best_score
+                )
+        
+        # Run optimization (synchronous in worker thread)
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        
+        study = optuna.create_study(direction='maximize')
+        study.optimize(
+            optimizer._objective,
+            n_trials=n_trials,
+            callbacks=[trial_callback],
+            show_progress_bar=False
+        )
+        
+        optimizer.study = study
+        optimizer.best_params = study.best_params
+        optimizer.best_score = study.best_value
+        
+        # Get best metrics
+        best_trial = study.best_trial
+        best_metrics = {
+            'total_profit': best_trial.user_attrs.get('total_profit', 0),
+            'sharpe': best_trial.user_attrs.get('sharpe', 0),
+            'max_dd': best_trial.user_attrs.get('max_dd', 0),
+            'trades': best_trial.user_attrs.get('trades', 0),
+            'win_rate': best_trial.user_attrs.get('win_rate', 0)
+        }
+        
+        log_run(run_id, "INFO", "Running final backtest with best parameters...", progress=0.92)
+        
+        # Run final backtest to generate artifacts
+        final_results = run_backtest_with_params(
+            df,
+            strategy_name,
+            study.best_params,
+            use_cache=False
+        )
+        
+        # Save artifacts (TODO: implement in backtest_with_params.py)
+        # For now, just save best params as JSON
+        artifact_dir = get_artifact_dir(run_id, 0)
+        
+        best_params_path = os.path.join(artifact_dir, "best_params.json")
+        with open(best_params_path, 'w') as f:
+            json.dump(study.best_params, f, indent=2)
+        
+        db_sqlite.insert_artifact(conn, run_id, 0, "best_params", best_params_path)
+        
+        log_run(run_id, "INFO", "Saving results...", progress=0.95)
+        
+        # Final summary
+        log_run(
+            run_id,
+            "INFO",
+            f"Optimization completed! Best profit: {best_metrics['total_profit']:.2f}% | Sharpe: {best_metrics['sharpe']:.2f}",
+            progress=1.0,
+            best_score=best_score
+        )
+        
+        db_sqlite.update_run_status(conn, run_id, "completed", completed_at=int(time.time()))
+    
+    except Exception as e:
+        db_sqlite.update_run_status(conn, run_id, "failed", completed_at=int(time.time()))
+        error_msg = f"Dynamic optimization failed: {str(e)}\n{traceback.format_exc()}"
+        log_run(run_id, "ERROR", error_msg, progress=1.0)
+    
+    finally:
+        conn.close()
+        if run_id in _active_runs:
+            del _active_runs[run_id]
+
+
+def start_dynamic_optimization_run(
+    strategy_name: str,
+    exchange: str = 'bitget',
+    symbol: str = 'BTC/USDT:USDT',
+    timeframe: str = '5m',
+    days: int = 90,
+    n_trials: int = 50
+) -> str:
+    """
+    Start dynamic parameter optimization run asynchronously
+    
+    Args:
+        strategy_name: Name of strategy 
