@@ -116,3 +116,72 @@ def supertrend(high, low, close, n=10, mult=3.0):
                 final_upper[i] = st[i-1]
         st[i] = final_lower[i] if trend[i]==1 else final_upper[i]
     return st, trend  # trend: +1 up, -1 down
+
+def mfi(high, low, close, volume, n=14):
+    """Money Flow Index - Volume-weighted RSI"""
+    h = np.asarray(high, float); l = np.asarray(low, float)
+    c = np.asarray(close, float); v = np.asarray(volume, float)
+    
+    tp = (h + l + c) / 3.0  # Typical price
+    raw_mf = tp * v  # Raw money flow
+    
+    # Positive and negative money flow
+    pos_mf = np.zeros_like(raw_mf)
+    neg_mf = np.zeros_like(raw_mf)
+    
+    for i in range(1, len(tp)):
+        if tp[i] > tp[i-1]:
+            pos_mf[i] = raw_mf[i]
+        elif tp[i] < tp[i-1]:
+            neg_mf[i] = raw_mf[i]
+    
+    # Calculate MFI
+    mfi_out = np.zeros_like(c)
+    for i in range(n, len(c)):
+        pos_sum = np.sum(pos_mf[i-n+1:i+1])
+        neg_sum = np.sum(neg_mf[i-n+1:i+1])
+        
+        if neg_sum == 0:
+            mfi_out[i] = 100.0
+        else:
+            mf_ratio = pos_sum / neg_sum
+            mfi_out[i] = 100 - (100 / (1 + mf_ratio))
+    
+    # Fill first n values with 50 (neutral)
+    mfi_out[:n] = 50.0
+    
+    return mfi_out
+
+def vwap(high, low, close, volume):
+    """Volume Weighted Average Price"""
+    h = np.asarray(high, float); l = np.asarray(low, float)
+    c = np.asarray(close, float); v = np.asarray(volume, float)
+    
+    tp = (h + l + c) / 3.0  # Typical price
+  
+    # Cumulative (typical price * volume) / cumulative volume
+    cum_tp_vol = np.cumsum(tp * v)
+    cum_vol = np.cumsum(v)
+    
+    # Avoid division by zero
+    vwap_out = np.where(cum_vol > 0, cum_tp_vol / cum_vol, tp)
+ 
+    return vwap_out
+
+def obv(close, volume):
+    """On-Balance Volume"""
+    c = np.asarray(close, float)
+    v = np.asarray(volume, float)
+    
+    obv_out = np.zeros_like(c)
+    obv_out[0] = v[0]
+    
+    for i in range(1, len(c)):
+        if c[i] > c[i-1]:
+            obv_out[i] = obv_out[i-1] + v[i]
+        elif c[i] < c[i-1]:
+            obv_out[i] = obv_out[i-1] - v[i]
+        else:
+            obv_out[i] = obv_out[i-1]
+    
+    return obv_out

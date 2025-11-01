@@ -21,22 +21,30 @@ if PROJECT_ROOT not in sys.path:
 
 from backend.agents.discovery.strategy_catalog import StrategyCatalog, StrategyTemplate
 from backend.agents.discovery.ranker import StrategyRanker, StrategyMetrics
+from backend.agents.discovery.entry_logic_builder import build_professional_entry_logic
 
 
 class StrategyDiscoveryEngine:
     """Automated strategy discovery system"""
 
-    def __init__(self, config_path: str = "config.yaml", max_parallel: int =5):
+    def __init__(self, config_path: str = "config.yaml", max_parallel: int = 5, timeframe: str = None):
         self.config_path = config_path
         self.max_parallel = max_parallel
+        self.timeframe = timeframe  # Override timeframe if provided
         self.catalog = StrategyCatalog()
         self.ranker = StrategyRanker()
 
         # Load base config
         with open(config_path, "r", encoding="utf-8") as f:
             self.base_config = yaml.safe_load(f) or {}
+        
+        # Override timeframe if specified
+        if self.timeframe:
+            self.base_config['timeframe'] = self.timeframe
 
         print(f"[StrategyDiscovery] Initialized with {len(self.catalog.INDICATORS)} indicators")
+        if self.timeframe:
+            print(f"[StrategyDiscovery] Using timeframe override: {self.timeframe}")
 
     async def run_backtest(self, strategy_name: str, strategy_config: Dict[str, Any]) -> Optional[StrategyMetrics]:
         """Run a single backtest asynchronously and return StrategyMetrics or None."""
@@ -54,53 +62,13 @@ class StrategyDiscoveryEngine:
                 temp_config["risk"] = dict(temp_config.get("risk", {}))
             temp_config["risk"].update(strategy_config.get("risk", {}))
 
-            # Build declarative entry logic from strategy indicators so backtest uses different rules
-            # Map known catalog ids to feature keys produced by backtest's feature extractor
-            id_to_feat = {
-                'ema_20': 'ema20', 'ema_50': 'ema50', 'ema_200': 'ema200',
-                'rsi_14': 'rsi14', 'rsi_7': 'rsi5', 'rsi_21': 'rsi14',
-                'donchian': 'up55', 'bollinger': 'bb_up', 'atr': 'atr14', 'adx': 'adx_14',
-                'cci': 'cci', 'stochastic': 'stoch_k', 'mfi': 'mfi_14', 'macd': 'macd',
-            }
-
+            # Build declarative entry logic from strategy indicators using PROFESSIONAL BUILDER
+            from backend.agents.discovery.entry_logic_builder import build_professional_entry_logic
+        
             indicators = strategy_config.get('indicators') or []
-            # Build simple LONG entry: any of the indicator signals triggers entry
-            long_any = []
-            short_any = []
-
-            for ind in indicators:
-                feat = id_to_feat.get(ind) or ind.replace('_','')
-                if ind.startswith('ema'):
-                    # price crosses above EMA => bullish
-                    long_any.append({'indicator': 'close', 'op': 'crosses_above', 'rhs_indicator': feat})
-                    short_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': feat})
-                elif ind.startswith('rsi'):
-                    # RSI crosses above30 => long, crosses below70 => short
-                    long_any.append({'indicator': feat, 'op': 'crosses_above', 'rhs':30})
-                    short_any.append({'indicator': feat, 'op': 'crosses_below', 'rhs':70})
-                elif ind in ('bollinger','bollinger_upper','bb_upper','bb_up'):
-                    # price crosses below lower band -> mean reversion long
-                    long_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': 'bb_lo'})
-                elif ind == 'donchian':
-                    long_any.append({'indicator': 'close', 'op': 'crosses_above', 'rhs_indicator': 'up55'})
-                    short_any.append({'indicator': 'close', 'op': 'crosses_below', 'rhs_indicator': 'dn55'})
-                elif ind == 'atr':
-                    # volatility breakout filter - require ATR increasing (use crosses_above on atr)
-                    long_any.append({'indicator': 'atr14', 'op': 'crosses_above', 'rhs':0.0})
-                else:
-                    # Generic: if feature exists, use LHS > RHS simple check (tunable)
-                    long_any.append({'indicator': feat, 'op': '>', 'rhs':0})
-
-            entry_obj = {
-                'long': {
-                    'entry_all': [],
-                    'entry_any': long_any
-                },
-                'short': {
-                    'entry_all': [],
-                    'entry_any': short_any
-                }
-            }
+   
+            # USE THE ENTRY LOGIC BUILDER (crossover-based, robust logic)
+            entry_obj = build_professional_entry_logic(indicators)
 
             # Attach declarative entry into risk config (should_enter reads params.get('entry') from risk)
             temp_config.setdefault('risk', {})

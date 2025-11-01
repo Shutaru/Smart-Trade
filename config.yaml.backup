@@ -22,44 +22,51 @@ ml:
 mode: paper
 risk:
   allow_shorts: true
-  breakeven_at_R: 1.0
-  sl_atr_mult: 2.2
-  sl_tp_style: keltner
-  trail_atr_mult: 2.0
-  tp_rr_multiple: 2.0
-  time_stop_bars: 96
-  keltner_mult: 1.5
-  max_daily_loss_pct: 2
-  partial_tp_at_R: 1
+  breakeven_at_R: 1
   entry:
     long:
       entry_all:
       - indicator: atr14
         op: '>'
         rhs: 0.0
+      - indicator: adx14
+        op: '>'
+        rhs: 20.0
       entry_any:
-      - indicator: rsi14
-        op: '<'
-        rhs: 35
-        # RSI oversold entry
       - indicator: close
         op: crosses_above
-        rhs_indicator: dn55
-        # Donchian breakout
+        rhs_indicator: up55
+      - indicator: rsi14
+        op: crosses_above
+        rhs: 25.0
+      - indicator: adx14
+        op: crosses_above
+        rhs: 25.0
     short:
       entry_all:
       - indicator: atr14
         op: '>'
         rhs: 0.0
-      entry_any:
-      - indicator: rsi14
+      - indicator: adx14
         op: '>'
-        rhs: 65
-        # RSI overbought entry
+        rhs: 20.0
+      entry_any:
       - indicator: close
         op: crosses_below
-        rhs_indicator: up55
-        # Donchian breakdown
+        rhs_indicator: dn55
+      - indicator: rsi14
+        op: crosses_below
+        rhs: 75.0
+      - indicator: adx14
+        op: crosses_above
+        rhs: 25.0
+  max_daily_loss_pct: 2
+  partial_tp_at_R: 1
+  sl_atr_mult: 2
+  sl_tp_style: atr_fixed
+  time_stop_bars: 96
+  tp_rr_multiple: 2
+  trail_atr_mult: 2
 sizing:
   leverage: 3
   max_margin_util_pct: 80
@@ -67,7 +74,7 @@ sizing:
   portfolio_pct: 1
   usd: 1000
 symbol: BTC/USDT:USDT
-timeframe: 5m
+timeframe: 1h
 tuning:
   adx_len:
   - 14

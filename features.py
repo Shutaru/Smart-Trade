@@ -1,5 +1,5 @@
 import numpy as np, pandas as pd
-from indicators import ema, atr, rsi, adx, bollinger, donchian, macd, stoch, cci
+from indicators import ema, atr, rsi, adx, bollinger, donchian, macd, stoch, cci, supertrend, mfi, vwap, obv, keltner
 
 def resample(ts, o,h,l,c, tf_seconds):
     # assumes 5m base
@@ -10,8 +10,27 @@ def resample(ts, o,h,l,c, tf_seconds):
     agg = df.resample(rule).agg({'o':'first','h':'max','l':'min','c':'last'}).dropna()
     return agg.index.view('int64')//10**9, agg['o'].values, agg['h'].values, agg['l'].values, agg['c'].values
 
-def compute_feature_rows(ts, o, h, l, c):
+def compute_feature_rows(ts, o, h, l, c, v=None):
+    """
+    Compute all technical indicators and return feature rows
+    
+    Args:
+ ts: timestamps
+    o, h, l, c: OHLC data
+        v: volume (optional, will use dummy values if not provided)
+    
+    Returns:
+        List of feature rows with all indicators
+    """
     ts = np.asarray(ts); o=np.asarray(o); h=np.asarray(h); l=np.asarray(l); c=np.asarray(c)
+    
+    # Handle volume (use dummy if not provided for backward compatibility)
+    if v is None:
+        v = np.ones_like(c) * 1000.0  # Dummy volume
+    else:
+        v = np.asarray(v)
+    
+    # Basic indicators (no volume needed)
     ema20_v = ema(c, 20)
     ema50_v = ema(c, 50)
     atr14_v = atr(h, l, c, 14)
@@ -44,6 +63,26 @@ def compute_feature_rows(ts, o, h, l, c):
     macd_line, macd_signal, macd_hist = macd(c,12,26,9)
     stoch_k_v, stoch_d_v = stoch(h, l, c,14,3)
     cci20_v = cci(h, l, c,20)
+    # Williams %R (period14)
+    williams_r_v = np.zeros_like(c)
+    per =14
+    for i in range(len(c)):
+        i0 = max(0, i-per+1)
+        hh = np.max(h[i0:i+1])
+        ll = np.min(l[i0:i+1])
+        rng = hh - ll if (hh - ll) !=0 else 1e-9
+        williams_r_v[i] = -100.0 * (hh - c[i]) / rng
+
+    # SuperTrend
+    st_line_v, st_dir_v = supertrend(h, l, c, n=10, mult=3.0)
+    
+    # Volume-based indicators (NEW!)
+    mfi14_v = mfi(h, l, c, v, 14)
+    vwap_v = vwap(h, l, c, v)
+    obv_v = obv(c, v)
+    
+    # Keltner Channels
+    kel_mid_v, kel_lo_v, kel_up_v = keltner(h, l, c, n=20, mult=2.0)
 
     rows = []
     for i in range(len(ts)):
@@ -68,6 +107,15 @@ def compute_feature_rows(ts, o, h, l, c):
         float(macd_hist[i]),
         float(stoch_k_v[i]),
         float(stoch_d_v[i]),
-        float(cci20_v[i])
-        ])
+        float(cci20_v[i]),
+        float(williams_r_v[i]),
+        float(st_line_v[i]),
+        int(st_dir_v[i]),
+        float(mfi14_v[i]),      # NEW: index 24
+        float(vwap_v[i]),       # NEW: index 25
+        float(obv_v[i]), # NEW: index 26
+        float(kel_mid_v[i]),  # NEW: index 27
+        float(kel_lo_v[i]),     # NEW: index 28
+        float(kel_up_v[i])  # NEW: index 29
+  ])
     return rows

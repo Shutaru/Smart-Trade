@@ -1,0 +1,59 @@
+﻿
+================================================================================
+OBV RANGE FADE + REGIME-ADAPTIVE EXITS - BACKTEST
+================================================================================
+Period: 90 days
+Timeframe: 5min
+Strategy: OBV Range Fade + Multi-Target Exits
+================================================================================
+
+[Data] Loading candles from 2025-08-02 to 2025-10-31
+[Data] Loaded 25597 candles
+
+[Features] Calculating indicators...
+[Features] Calculated 29 indicators
+
+[Broker] Initialized V2 broker with regime-adaptive exits
+[Broker] Starting equity: $100,000.00
+[Broker] Output directory: data\test_obv_regime\1761940419
+
+[Backtest] Starting simulation...
+================================================================================
+
+[Trade #1] LONG Entry
+  Time: 1970-01-21 07:20
+  Price: $113,164.10
+  Quantity: 0.017673
+  SL: $112,365.60 | Primary TP: $114,761.10
+  R: $798.50
+  Targets: 3
+    Target 1: $113,962.70 (1.0R) - 25%
+    Target 2: $115,160.40 (2.5R) - 35%
+    Target 3: $116,358.20 (4.0R) - 40%
+  Trailing: keltner
+  Time Stop: 96 bars
+
+================================================================================
+[Backtest] Simulation complete
+================================================================================
+
+[Metrics] Calculating performance...
+
+================================================================================
+BACKTEST RESULTS
+================================================================================
+python : Traceback (most recent call last):
+At line:1 char:7
++ try { python test_obv_range_fade.py --days 90 2>&1 | Out-File -Encodi ...
++       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\shuta\Desktop\Smart-Trade\test_obv_range_fade.py", line 296, in <module>
+    main()
+  File "C:\Users\shuta\Desktop\Smart-Trade\test_obv_range_fade.py", line 219, in main
+    print(f"\n\U0001f4ca Trading Activity:")
+  File "C:\Python312\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4ca' in position 2: character maps to <undefined>

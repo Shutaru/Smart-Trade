@@ -163,28 +163,33 @@ def evaluate_condition(cond: Dict[str, Any], i: int, ts, o, h, l, c, feats: Dict
                 return (lhs >= low) and (lhs <= high)
             return False
         if op == 'crosses_above':
-            # lhs_prev < rhs_prev and lhs >= rhs
+            # lhs crosses above rhs: lhs_prev <= rhs_prev AND lhs > rhs
             if lhs_prev is None:
                 return False
             if rhs_ind:
+                # Comparing with another indicator
                 if rhs_prev is None or rhs_val is None:
                     return False
-                return (lhs_prev < rhs_prev) and (lhs >= rhs_val)
+                return (lhs_prev <= rhs_prev) and (lhs > rhs_val)
             else:
+                # Comparing with constant
                 if rhs_val is None:
                     return False
-                return (lhs_prev < rhs_val) and (lhs >= rhs_val)
+                return (lhs_prev <= rhs_val) and (lhs > rhs_val)
         if op == 'crosses_below':
+            # lhs crosses below rhs: lhs_prev >= rhs_prev AND lhs < rhs
             if lhs_prev is None:
                 return False
             if rhs_ind:
+                # Comparing with another indicator
                 if rhs_prev is None or rhs_val is None:
                     return False
-                return (lhs_prev > rhs_prev) and (lhs <= rhs_val)
+                return (lhs_prev >= rhs_prev) and (lhs < rhs_val)
             else:
+                # Comparing with constant
                 if rhs_val is None:
                     return False
-                return (lhs_prev > rhs_val) and (lhs <= rhs_val)
+                return (lhs_prev >= rhs_val) and (lhs < rhs_val)
     except Exception:
         return False
 

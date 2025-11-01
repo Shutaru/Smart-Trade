@@ -1,4 +1,4 @@
-import argparse, time, os, json, csv
+import argparse, time, os, json, csv, re, sys
 import yaml
 import numpy as np
 from db_sqlite import connect, load_range
@@ -9,18 +9,41 @@ from sizing import compute_qty
 from strategy import should_enter, compute_exit_levels
 from metrics import equity_metrics, trades_metrics
 
+# Support compact argument form like `--days30` (user typed no space).
+# Transform sys.argv in-place for patterns like --nameVALUE -> --name VALUE
+def _preprocess_argv():
+    argv = sys.argv
+    new_argv = [argv[0]]
+    # Pattern captures a flag name followed immediately by digits, e.g. --days30
+    # Ensure the name group does not eat trailing digit characters by making it non-greedy
+    pattern = re.compile(r"^--([a-zA-Z_][a-zA-Z0-9_-]*?)(\d+)$")
+    for a in argv[1:]:
+        m = pattern.match(a)
+        if m:
+            name = m.group(1)
+            val = m.group(2)
+            new_argv.append(f"--{name}")
+            new_argv.append(val)
+        else:
+            new_argv.append(a)
+    sys.argv[:] = new_argv
+
+_preprocess_argv()
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--days", type=int, default=365)
 ap.add_argument("--progress-file", type=str, default=None)
+ap.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
 args = ap.parse_args()
 
-with open("config.yaml","r") as f: cfg = yaml.safe_load(f)
+with open(args.config,"r") as f: cfg = yaml.safe_load(f)
 conn = connect(cfg.get("db",{}).get("path","data/bot.db"))
 now = int(time.time()); start = now - args.days*24*60*60
 rows = load_range(conn, start, now)
 ts = [r[0] for r in rows]; o=[r[1] for r in rows]; h=[r[2] for r in rows]; l=[r[3] for r in rows]; c=[r[4] for r in rows]
+v = [r[5] for r in rows] if len(rows[0]) > 5 else None  # Extract volume if available
 
-feats_rows = compute_feature_rows(ts,o,h,l,c)
+feats_rows = compute_feature_rows(ts,o,h,l,c,v)
 # indicators for trailing
 st_line, st_tr = supertrend(h, l, c, n=10, mult=3.0)
 kel_mid, kel_lo, kel_up = keltner(h, l, c, n=20, mult=1.5)
@@ -37,16 +60,26 @@ feat = {
     "bb_up": [r[9] for r in feats_rows],
     "dn55": [r[10] for r in feats_rows],
     "up55": [r[11] for r in feats_rows],
-    "regime": [r[12] for r in feats_rows],
+  "regime": [r[12] for r in feats_rows],
     "macro": [r[13] for r in feats_rows],
     "atr1h_pct": [r[14] for r in feats_rows],
     # additional indicators
     "macd": [r[15] for r in feats_rows],
     "macd_signal": [r[16] for r in feats_rows],
-    "macd_hist": [r[17] for r in feats_rows],
+  "macd_hist": [r[17] for r in feats_rows],
     "stoch_k": [r[18] for r in feats_rows],
     "stoch_d": [r[19] for r in feats_rows],
     "cci20": [r[20] for r in feats_rows],
+    "williams_r": [r[21] for r in feats_rows],
+    "supertrend": [r[22] for r in feats_rows],
+    "supertrend_dir": [r[23] for r in feats_rows],
+    # NEW: Volume-based indicators
+    "mfi14": [r[24] for r in feats_rows],
+    "vwap": [r[25] for r in feats_rows],
+    "obv": [r[26] for r in feats_rows],
+    "keltner_mid": [r[27] for r in feats_rows],
+    "keltner_lo": [r[28] for r in feats_rows],
+    "keltner_up": [r[29] for r in feats_rows],
 }
 
 outdir = os.path.join("data","backtests", str(int(time.time())))
