@@ -130,19 +130,26 @@ class StrategyOptimizer:
         for param_name, param_value in params.items():
             temp_config['risk'][param_name] = param_value
         
-        # Save temporary config
-        temp_config_path = self.output_dir / f"temp_config_{int(time.time())}.yaml"
-        with open(temp_config_path, 'w') as f:
-            yaml.safe_dump(temp_config, f)
+        # Backup original config and save temp config
+        config_backup = Path(self.base_config_path + '.backup')
+        original_config_path = Path(self.base_config_path)
         
         try:
+            # Backup original
+            if original_config_path.exists():
+                import shutil
+                shutil.copy(original_config_path, config_backup)
+            
+            # Write temporary config
+            with open(original_config_path, 'w') as f:
+                yaml.safe_dump(temp_config, f)
+            
             # Run backtest using entry point
             cmd = [
                 sys.executable,
                 'run_backtest.py',
                 '--days', str(days),
-                '--strategies', self.strategy_name,
-                '--config', str(temp_config_path)
+                '--strategies', self.strategy_name
             ]
             
             result = subprocess.run(
@@ -180,9 +187,12 @@ class StrategyOptimizer:
             return {'sharpe': -999.0, 'return': -999.0, 'max_dd': -999.0}
         
         finally:
-            # Cleanup temp config
-            if temp_config_path.exists():
-                temp_config_path.unlink()
+            # Restore original config
+            if config_backup.exists():
+                import shutil
+                shutil.move(config_backup, original_config_path)
+            elif original_config_path.exists():
+                original_config_path.unlink()
     
     def _objective_function(self, trial: optuna.Trial) -> float:
         """
