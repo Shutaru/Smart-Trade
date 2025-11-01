@@ -136,11 +136,12 @@ class StrategyOptimizer:
             yaml.safe_dump(temp_config, f)
         
         try:
-            # Run backtest
+            # Run backtest using entry point
             cmd = [
                 sys.executable,
-                'backtest.py',
+                'run_backtest.py',
                 '--days', str(days),
+                '--strategies', self.strategy_name,
                 '--config', str(temp_config_path)
             ]
             
