@@ -43,13 +43,19 @@ def run_command(cmd, description):
 
 
 def parse_json_output(output):
+    """Parse JSON from command output"""
     for line in output.split('\n'):
         line = line.strip()
         if line.startswith('{'):
             try:
-                return json.loads(line)
-            except:
+                result = json.loads(line)
+                return result
+            except json.JSONDecodeError as e:
+                print(f"  [Warning] Failed to parse JSON: {e}")
                 continue
+    
+    # If no JSON found, print last 200 chars for debug
+    print(f"  [Warning] No JSON found in output. Last 200 chars:\n  {output[-200:]}")
     return None
 
 
@@ -102,13 +108,13 @@ def main():
         
         if success:
             metrics = parse_json_output(output)
-            if metrics and 'error' not in metrics:
-                baseline_results[strategy] = {'metrics': metrics, 'elapsed': elapsed}
-                print(f"  Return: {metrics['ret_tot_pct']:.2f}% | Sharpe: {metrics['sharpe_ann']:.2f} | Trades: {metrics['trades']}\n")
-            else:
-                baseline_results[strategy] = {'error': metrics.get('error', 'Unknown')}
+        if metrics and 'error' not in metrics:
+           baseline_results[strategy] = {'metrics': metrics, 'elapsed': elapsed}
+           print(f"  Return: {metrics['ret_tot_pct']:.2f}% | Sharpe: {metrics['sharpe_ann']:.2f} | Trades: {metrics['trades']}\n")
+    else:
+          baseline_results[strategy] = {'error': metrics.get('error', 'Unknown') if metrics else 'Failed to parse output'}
         else:
-            baseline_results[strategy] = {'error': output}
+         baseline_results[strategy] = {'error': output}
     
     results['baseline'] = baseline_results
     with open(output_dir / 'results_step1_baseline.json', 'w') as f:
@@ -177,14 +183,14 @@ def main():
         success, output, elapsed = run_command(cmd, f"Post-opt: {strategy}")
         
         if success:
-            metrics = parse_json_output(output)
-            if metrics and 'error' not in metrics:
-                post_opt_results[strategy] = {'metrics': metrics, 'elapsed': elapsed, 'optimized_params': opt_data['best_params']}
-                print(f"  Return: {metrics['ret_tot_pct']:.2f}% | Sharpe: {metrics['sharpe_ann']:.2f} | Trades: {metrics['trades']}\n")
-            else:
-                post_opt_results[strategy] = {'error': metrics.get('error', 'Unknown')}
+      metrics = parse_json_output(output)
+    if metrics and 'error' not in metrics:
+     post_opt_results[strategy] = {'metrics': metrics, 'elapsed': elapsed, 'optimized_params': opt_data['best_params']}
+   print(f"  Return: {metrics['ret_tot_pct']:.2f}% | Sharpe: {metrics['sharpe_ann']:.2f} | Trades: {metrics['trades']}\n")
+     else:
+      post_opt_results[strategy] = {'error': metrics.get('error', 'Unknown') if metrics else 'Failed to parse output'}
         else:
-            post_opt_results[strategy] = {'error': output}
+       post_opt_results[strategy] = {'error': output}
     
     results['post_optimization'] = post_opt_results
     with open(output_dir / 'validation_results.json', 'w') as f:

@@ -71,7 +71,7 @@ sizing:
   portfolio_pct: 1
   usd: 1000
 strategy: bollinger_mean_reversion
-symbol: ETH/USDT
+symbol: BTC/USDT:USDT
 timeframe: 5m
 tuning:
   adx_len:
