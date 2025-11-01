@@ -22,10 +22,13 @@ ml:
 mode: paper
 risk:
   allow_shorts: true
-  bb_period: 30
+  bb_period: 25
   bb_std: 1.75
   breakeven_at_R: 1.0
-  breakeven_r: 0.75
+  breakeven_r: 1.0
+  cci_overbought: 110
+  cci_oversold: -80
+  cci_period: 20
   entry:
     long:
       entry_all:
@@ -54,16 +57,17 @@ risk:
   keltner_mult: 1.5
   max_daily_loss_pct: 2
   partial_tp_at_R: 1
-  rsi_overbought: 85
-  rsi_oversold: 15
-  rsi_period: 22
+  rsi_overbought: 80
+  rsi_oversold: 35
+  rsi_period: 15
   sl_atr_mult: 2.2
-  sl_rr_ratio: 1.25
+  sl_rr_ratio: 2.25
   sl_tp_style: keltner
-  time_stop_bars: 120
+  time_stop_bars: 72
   tp_rr_multiple: 2.0
-  tp_rr_ratio: 2.0
+  tp_rr_ratio: 4.0
   trail_atr_mult: 2.0
+  vwap_deviation: 1.5
 sizing:
   leverage: 3
   max_margin_util_pct: 80
