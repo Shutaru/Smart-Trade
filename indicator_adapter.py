@@ -5,11 +5,11 @@ Converts the existing indicator system to the format expected by the 38 strategi
 
 The 38 strategies expect indicators in a specific format:
     ind = {
- 'ema20': value,
+        'ema20': value,
         'ema50': value,
         'rsi14': value,
         'supertrend_bull': bool,
-      ...
+        ...
         'prev_high': value,
         'close_prev': value,
         etc.
@@ -27,25 +27,25 @@ def build_indicator_dict(i: int, ts: List, o: List, h: List, l: List, c: List, f
     Build indicator dictionary for a specific bar index
     
     Args:
-      i: Current bar index
+        i: Current bar index
         ts: Timestamp array
         o: Open array
-  h: High array
+        h: High array
         l: Low array
         c: Close array
         feats: Features dictionary from compute_feature_rows
         
     Returns:
-      Dictionary with all indicators in the format expected by strategies
+        Dictionary with all indicators in the format expected by strategies
     """
     
-  # Helper to safely get value from array
+    # Helper to safely get value from array
     def get_val(arr, idx, default=None):
-     try:
+        try:
             if arr is None or idx < 0 or idx >= len(arr):
                 return default
-          val = arr[idx]
-  return val if val is not None and not (isinstance(val, float) and np.isnan(val)) else default
+            val = arr[idx]
+            return val if val is not None and not (isinstance(val, float) and np.isnan(val)) else default
         except (IndexError, TypeError):
             return default
     
@@ -54,7 +54,7 @@ def build_indicator_dict(i: int, ts: List, o: List, h: List, l: List, c: List, f
         return get_val(arr, idx - 1, default) if idx > 0 else default
     
     # Helper to get value N bars ago
-  def get_ago(arr, idx, n, default=None):
+    def get_ago(arr, idx, n, default=None):
         return get_val(arr, idx - n, default) if idx >= n else default
     
     ind = {}
@@ -82,7 +82,7 @@ def build_indicator_dict(i: int, ts: List, o: List, h: List, l: List, c: List, f
     # ========================================================================
     
     # EMAs
- ind['ema20'] = get_val(feats.get('ema20'), i, ind['close'])
+    ind['ema20'] = get_val(feats.get('ema20'), i, ind['close'])
     ind['ema50'] = get_val(feats.get('ema50'), i, ind['close'])
     ind['ema200'] = get_val(feats.get('ema200'), i, ind['close'])
     
@@ -104,7 +104,7 @@ def build_indicator_dict(i: int, ts: List, o: List, h: List, l: List, c: List, f
     
     # Previous SuperTrend
     st_dir_prev = get_prev(feats.get('supertrend_dir'), i, st_dir)
-ind['supertrend_bull_prev'] = st_dir_prev == 1
+    ind['supertrend_bull_prev'] = st_dir_prev == 1
     ind['supertrend_bear_prev'] = st_dir_prev == -1
     
     # ========================================================================
@@ -148,7 +148,7 @@ ind['supertrend_bull_prev'] = st_dir_prev == 1
     # ========================================================================
     
     # ATR
-  ind['atr'] = get_val(feats.get('atr14'), i, ind['close'] * 0.01)
+    ind['atr'] = get_val(feats.get('atr14'), i, ind['close'] * 0.01)
     ind['atr14'] = ind['atr']  # Alias
     
     # ATR percentile (if available)
@@ -192,13 +192,13 @@ ind['supertrend_bull_prev'] = st_dir_prev == 1
     ind['vwap'] = get_val(feats.get('vwap'), i, ind['close'])
     
     # VWAP standard deviation (estimated)
-ind['vwap_std'] = ind['atr'] * 0.5  # Rough estimate if not available
+    ind['vwap_std'] = ind['atr'] * 0.5  # Rough estimate if not available
     
     # OBV
     ind['obv'] = get_val(feats.get('obv'), i, 0)
     ind['obv_prev'] = get_prev(feats.get('obv'), i, ind['obv'])
     ind['obv_5bars_ago'] = get_ago(feats.get('obv'), i, 5, ind['obv'])
-
+    
     # MFI
     ind['mfi'] = get_val(feats.get('mfi14'), i, 50)
     ind['mfi_prev'] = get_prev(feats.get('mfi14'), i, ind['mfi'])
@@ -216,7 +216,7 @@ ind['vwap_std'] = ind['atr'] * 0.5  # Rough estimate if not available
     ind['minutes_since_ny_open'] = 999
     
     # Opening range (placeholder)
- ind['or_high'] = ind['high']
+    ind['or_high'] = ind['high']
     ind['or_low'] = ind['low']
     
     return ind
@@ -230,7 +230,7 @@ def build_bar_dict(i: int, o: List, h: List, l: List, c: List, v: List = None) -
         i: Current bar index
         o: Open array
         h: High array
-  l: Low array
+        l: Low array
         c: Close array
         v: Volume array (optional)
         
@@ -238,8 +238,8 @@ def build_bar_dict(i: int, o: List, h: List, l: List, c: List, v: List = None) -
         Dictionary with OHLCV data
     """
     bar = {
-      'open': o[i] if i < len(o) else 0,
-     'high': h[i] if i < len(h) else 0,
+        'open': o[i] if i < len(o) else 0,
+        'high': h[i] if i < len(h) else 0,
         'low': l[i] if i < len(l) else 0,
         'close': c[i] if i < len(c) else 0,
     }
@@ -255,36 +255,36 @@ def build_state_dict(position=None, cooldown_bars_left=0, **kwargs) -> Dict[str,
     Build state dictionary for strategy execution
     
     Args:
- position: Current position (None if flat, 'LONG' or 'SHORT')
+        position: Current position (None if flat, 'LONG' or 'SHORT')
         cooldown_bars_left: Remaining cooldown bars after stop
-**kwargs: Additional state variables
- 
+        **kwargs: Additional state variables
+    
     Returns:
         Dictionary with state information
     """
     state = {
-    'position': position,
+        'position': position,
         'cooldown_bars_left': cooldown_bars_left,
     }
     
     # Add any additional state
     state.update(kwargs)
     
- return state
+    return state
 
 
 def extract_exit_params(signal: Dict[str, Any]) -> Dict[str, Any]:
-"""
+    """
     Extract exit parameters from strategy signal
     
     Args:
-    signal: Strategy signal dictionary with 'meta' field
+        signal: Strategy signal dictionary with 'meta' field
         
     Returns:
         Dictionary with exit parameters for broker
     """
     if not signal or 'meta' not in signal:
-     return {}
+        return {}
     
     meta = signal['meta']
     
@@ -292,7 +292,7 @@ def extract_exit_params(signal: Dict[str, Any]) -> Dict[str, Any]:
         'sl_tp_style': meta.get('sl_tp_style', 'atr_fixed'),
         'sl_atr_mult': meta.get('sl_atr_mult', 2.0),
         'tp_rr_multiple': meta.get('tp_rr_multiple', 2.0),
-     'trail_atr_mult': meta.get('trail_atr_mult'),
+        'trail_atr_mult': meta.get('trail_atr_mult'),
         'breakeven_at_R': meta.get('breakeven_at_R'),
     }
     
@@ -307,26 +307,26 @@ if __name__ == "__main__":
     print("Indicator Adapter - Usage Example")
     print("=" * 80)
     print("""
-  # In your backtest loop:
-    
-    from indicator_adapter import build_indicator_dict, build_bar_dict, build_state_dict
-    from strategy_registry import get_strategy
-    
-    # Get strategy
-    strategy_fn = get_strategy("trendflow_supertrend")
- 
-    # Build inputs
-    bar = build_bar_dict(i, o, h, l, c, v)
-    ind = build_indicator_dict(i, ts, o, h, l, c, feats)
-    state = build_state_dict(position=None, cooldown_bars_left=0)
-    params = {}  # Strategy-specific parameters
-    
-    # Get signal
-    signal = strategy_fn(bar, ind, state, params)
-    
-    if signal:
-     print(f"Side: {signal['side']}")
-   print(f"Reason: {signal['reason']}")
-        print(f"Regime: {signal['regime_hint']}")
- print(f"Exit style: {signal['meta']['sl_tp_style']}")
+# In your backtest loop:
+
+from indicator_adapter import build_indicator_dict, build_bar_dict, build_state_dict
+from strategy_registry import get_strategy
+
+# Get strategy
+strategy_fn = get_strategy("trendflow_supertrend")
+
+# Build inputs
+bar = build_bar_dict(i, o, h, l, c, v)
+ind = build_indicator_dict(i, ts, o, h, l, c, feats)
+state = build_state_dict(position=None, cooldown_bars_left=0)
+params = {}  # Strategy-specific parameters
+
+# Get signal
+signal = strategy_fn(bar, ind, state, params)
+
+if signal:
+    print(f"Side: {signal['side']}")
+    print(f"Reason: {signal['reason']}")
+    print(f"Regime: {signal['regime_hint']}")
+    print(f"Exit style: {signal['meta']['sl_tp_style']}")
     """)
