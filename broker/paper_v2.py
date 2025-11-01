@@ -60,12 +60,12 @@ class PaperFuturesBrokerV2:
     def _init_files(self):
         """Initialize CSV files"""
         if not os.path.exists(self.trades_path):
-            with open(self.trades_path, "w", newline="") as f:
+            with open(self.trades_path, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
                 w.writerow(["ts_utc", "action", "side", "qty", "price", "pnl", "note"])
         
         if not os.path.exists(self.equity_path):
-            with open(self.equity_path, "w", newline="") as f:
+            with open(self.equity_path, "w", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
                 w.writerow(["ts", "equity"])
     
@@ -379,14 +379,14 @@ class PaperFuturesBrokerV2:
     
     def _log(self, ts: int, action: str, side: str, qty: float, price: float, pnl: float, note: str):
         """Log trade to CSV"""
-        with open(self.trades_path, "a", newline="") as f:
+        with open(self.trades_path, "a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow([ts, action, side, qty, price, pnl, note])
     
     def _write_equity(self, ts: int):
         """Write equity to curve"""
         self.equity_curve.append([ts, self.equity])
-        with open(self.equity_path, "a", newline="") as f:
+        with open(self.equity_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([ts, self.equity])
 
 

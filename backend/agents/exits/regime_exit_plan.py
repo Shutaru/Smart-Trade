@@ -133,7 +133,9 @@ def build_exit_plan(
     # === Initial SL (structure + ATR) ===
     if side == "LONG":
         if style in ("structure_atr", "chandelier", "keltner", "supertrend"):
-            swing_low = ctx.get("swing_low", entry - sl_mult * atr)
+            swing_low = ctx.get("swing_low")
+            if swing_low is None:
+                swing_low = entry - sl_mult * atr
             base_sl = min(swing_low, entry - sl_mult * atr)
             base_sl = base_sl - _swing_buffer(ctx, atr)
         else:
@@ -145,7 +147,9 @@ def build_exit_plan(
     
     else:  # SHORT
         if style in ("structure_atr", "chandelier", "keltner", "supertrend"):
-            swing_high = ctx.get("swing_high", entry + sl_mult * atr)
+            swing_high = ctx.get("swing_high")
+            if swing_high is None:
+                swing_high = entry + sl_mult * atr
             base_sl = max(swing_high, entry + sl_mult * atr)
             base_sl = base_sl + _swing_buffer(ctx, atr)
         else:

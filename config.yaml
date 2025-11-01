@@ -5,7 +5,7 @@ bitget:
   api_secret: ''
   password: ''
 db:
-  path: data/db/BTC_USDT_USDT_5m.db
+  path: data\db\ETH_USDT_5m.db
 exchange: binance
 fees:
   maker_fee_bps: 2
@@ -39,13 +39,11 @@ risk:
         rhs: 0.0
       entry_any:
       - indicator: rsi14
-        op: '<'
+        op: <
         rhs: 35
-        # RSI oversold entry
       - indicator: close
         op: crosses_above
         rhs_indicator: dn55
-        # Donchian breakout
     short:
       entry_all:
       - indicator: atr14
@@ -55,18 +53,16 @@ risk:
       - indicator: rsi14
         op: '>'
         rhs: 65
-        # RSI overbought entry
       - indicator: close
         op: crosses_below
         rhs_indicator: up55
-        # Donchian breakdown
 sizing:
   leverage: 3
   max_margin_util_pct: 80
   mode: usd
   portfolio_pct: 1
   usd: 1000
-symbol: BTC/USDT:USDT
+symbol: ETH/USDT
 timeframe: 5m
 tuning:
   adx_len:
