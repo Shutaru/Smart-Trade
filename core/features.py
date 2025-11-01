@@ -1,5 +1,5 @@
 import numpy as np, pandas as pd
-from indicators import ema, atr, rsi, adx, bollinger, donchian, macd, stoch, cci, supertrend, mfi, vwap, obv, keltner
+from .indicators import ema, atr, rsi, adx, bollinger, donchian, macd, stoch, cci, supertrend, mfi, vwap, obv, keltner
 
 def resample(ts, o,h,l,c, tf_seconds):
     # assumes 5m base

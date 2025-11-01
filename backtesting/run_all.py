@@ -20,15 +20,15 @@ from typing import List, Dict, Any
 import concurrent.futures
 from pathlib import Path
 
-from db_sqlite import connect, load_range
-from features import compute_feature_rows
-from indicators import supertrend as calc_supertrend, keltner as calc_keltner
-from broker_futures_paper_v2 import PaperFuturesBrokerV2
-from sizing import compute_qty
-from metrics import equity_metrics, trades_metrics
-from strategy_regime import build_regime_exit_plan
+from core.database import connect, load_range
+from core.features import compute_feature_rows
+from core.indicators import supertrend as calc_supertrend, keltner as calc_keltner
+from broker.paper_v2 import PaperFuturesBrokerV2
+from core.sizing import compute_qty
+from core.metrics import equity_metrics, trades_metrics
+from strategies.regime import build_regime_exit_plan
 
-from strategy_registry import (
+from strategies.registry import (
     ALL_STRATEGIES,
     get_strategy,
     list_all_strategies,
@@ -36,7 +36,7 @@ from strategy_registry import (
     get_strategy_info,
     STRATEGY_PRESETS
 )
-from indicator_adapter import (
+from strategies.adapter import (
     build_indicator_dict,
     build_bar_dict,
     build_state_dict,
