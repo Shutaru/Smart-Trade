@@ -123,6 +123,9 @@ class StrategyOptimizer:
         # Create temporary config with optimized parameters
         temp_config = dict(self.base_config)
         
+        # Set strategy name
+        temp_config['strategy'] = self.strategy_name
+      
         # Apply parameters to config
         if 'risk' not in temp_config:
             temp_config['risk'] = {}
@@ -144,12 +147,11 @@ class StrategyOptimizer:
             with open(original_config_path, 'w') as f:
                 yaml.safe_dump(temp_config, f)
             
-            # Run backtest using entry point
+            # Run backtest using wrapper
             cmd = [
                 sys.executable,
-                'run_backtest.py',
-                '--days', str(days),
-                '--strategies', self.strategy_name
+                'run_single_backtest.py',
+                '--days', str(days)
             ]
             
             result = subprocess.run(
@@ -488,4 +490,5 @@ if __name__ == '__main__':
     
     print("\n✅ Optimization complete!")
     print(f"Best Score: {results['best_value']:.2f}")
+    print(f"Best params: {results['best_params']}")    
     print(f"Best params: {results['best_params']}")
